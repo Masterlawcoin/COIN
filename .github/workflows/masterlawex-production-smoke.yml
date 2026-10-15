@@ -1,0 +1,34 @@
+name: MasterlawEX Production Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      soft:
+        description: 'Report stale production without failing the workflow'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: masterlawex-production-smoke
+  cancel-in-progress: true
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Verify canonical production against current main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRODUCTION_SMOKE_SOFT: ${{ inputs.soft && '1' || '0' }}
+        run: node scripts/verify-production-live.js
