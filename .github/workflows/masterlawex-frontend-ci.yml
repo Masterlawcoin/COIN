@@ -92,6 +92,16 @@ jobs:
           grep -q '/api/exchange/p2p/admin/prepare-evidence' mediation-admin.js
           grep -q '/api/exchange/p2p/admin/prepare-resolution' mediation-admin.js
           grep -q 'ADMIN_CONTROL_PLANE_SCOPE_MISMATCH' mediation-admin.js
+          grep -q 'MASTERLAWEX_P2P_ACTIVATION_READINESS_V1' mediation-admin.js
+          grep -q 'P2P Activation Readiness' mediation-admin.js
+          grep -q 'SERVER ENFORCEMENT · BLOCKED' mediation-admin.js
+          grep -q 'CASE STORE · BLOCKED' mediation-admin.js
+          grep -q 'REAL P2P · BLOCKED' mediation-admin.js
+          grep -q 'const serverEntitlementEnforced=false' mediation-admin.js
+          grep -q 'const casePersistenceEnabled=false' mediation-admin.js
+          grep -q 'const realMoneyEnabled=false' mediation-admin.js
+          grep -q 'supabase_mutation_performed:false' mediation-admin.js
+          grep -q 'browser_arbitration_broadcast:false' mediation-admin.js
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' mediation.js
           ! grep -E 'localStorage|sessionStorage' mediation-admin.js
           ! grep -E 'eth_sendTransaction|private[_ -]?key|secretKey' mediation-admin.js
@@ -145,6 +155,11 @@ jobs:
           grep -q '/api/exchange/p2p/admin/prepare-case' dist/mediation-admin.js
           grep -q '/api/exchange/p2p/admin/prepare-evidence' dist/mediation-admin.js
           grep -q '/api/exchange/p2p/admin/prepare-resolution' dist/mediation-admin.js
+          grep -q 'MASTERLAWEX_P2P_ACTIVATION_READINESS_V1' dist/mediation-admin.js
+          grep -q 'SERVER ENFORCEMENT · BLOCKED' dist/mediation-admin.js
+          grep -q 'CASE STORE · BLOCKED' dist/mediation-admin.js
+          grep -q 'const serverEntitlementEnforced=false' dist/mediation-admin.js
+          grep -q 'const casePersistenceEnabled=false' dist/mediation-admin.js
           grep -q 'openDisputeByArbiter(uint256,bytes32)' dist/mediation-abi.js
           grep -q 'resolveDispute(uint256,bool,bytes32)' dist/mediation-abi.js
           grep -q 'broadcastByBrowser:false' dist/mediation.js
