@@ -12,17 +12,18 @@
 <body>
 <header class="topbar"><a class="logo" href="/">MasterlawEX</a><nav><a href="/">Trade</a><a href="/p2p.html">P2P</a><a href="/protocol.html">Protocol</a><a class="active" href="/mediation.html">Mediation</a></nav><button class="connect" data-connect data-wallet>Conectar wallet</button></header>
 <main class="med-wrap">
-  <div class="med-banner"><b>ARC TESTNET · P2P V1.4 · PRE-REAL-MONEY</b><br>Consola operativa para verificación, KYC y preparación de acciones de mediación. No firma ni transmite arbitrajes; genera calldata para el multisig/smart-account de Masterlaw.</div>
+  <div class="med-banner"><b>ARC TESTNET · P2P V1.4 · PRE-REAL-MONEY</b><br>Consola operativa para verificación, KYC, vínculo de wallet y preparación de mediación. No transmite arbitrajes; genera calldata para el multisig/smart-account de Masterlaw.</div>
 
   <div class="med-grid">
     <section class="med-card">
-      <h2>Masterlaw KYC Gate</h2>
-      <p>La identidad válida proviene de Masterlaw. Sin sesión/KYC verificado, P2P real permanece bloqueado.</p>
-      <div class="med-actions"><span id="apiHealth" class="med-status warn">API · CHECKING</span><span id="kycState" class="med-status bad">KYC · BLOCKED</span><span id="moneyState" class="med-status bad">REAL MONEY · OFF</span></div>
+      <h2>Masterlaw KYC + Wallet Gate</h2>
+      <p>Para vincular identidad y wallet se requieren dos pruebas independientes: JWT Masterlaw con KYC aprobado y sesión P2P creada mediante firma de la wallet. La credencial resultante dura 15 minutos y permanece sólo en memoria.</p>
+      <div class="med-actions"><span id="apiHealth" class="med-status warn">API · CHECKING</span><span id="kycState" class="med-status bad">KYC · BLOCKED</span><span id="walletState" class="med-status bad">WALLET · UNBOUND</span><span id="moneyState" class="med-status bad">REAL MONEY · OFF</span></div>
       <div class="med-form" style="margin-top:12px">
         <label>Token de sesión Masterlaw (sólo memoria de esta pestaña)<input id="masterlawToken" type="password" autocomplete="off" placeholder="Bearer JWT"></label>
-        <div class="med-actions"><button id="checkKyc" class="med-btn">Validar acceso KYC</button><button id="clearKyc" class="med-btn">Limpiar token</button></div>
+        <div class="med-actions"><button id="checkKyc" class="med-btn">1. Validar KYC</button><button id="bindWallet" class="med-btn primary">2. Vincular wallet ARC</button><button id="clearKyc" class="med-btn">Limpiar credencial</button></div>
       </div>
+      <p>La sesión P2P firmada se toma automáticamente de esta misma pestaña. Si falta, abre P2P, inicia sesión con la wallet y vuelve a Mediation.</p>
       <pre id="kycOutput" class="med-output">Esperando verificación Masterlaw…</pre>
     </section>
 
