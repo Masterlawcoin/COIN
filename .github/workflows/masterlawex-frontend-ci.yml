@@ -55,6 +55,10 @@ jobs:
           grep -q "P2P_BUILD='83cdc85310add7e791b955bb63dfbfea0976eb6e'" base/protocol.js
           grep -q "P2P_BUILD_ID='0x762d93a9ce52445a9beced69f6aba33aa60734f6c7ca0242b594ad505ad7ed86'" base/protocol.js
           grep -q "P2P_ORDER_REF_DOMAIN='0xa8e22b39121058b75ab1c64c27412cd473a621f194cb1636443b2662dc0f8f66'" base/protocol.js
+          grep -q 'P2P_RECORD_SCHEMA=3' base/protocol.js
+          grep -q 'P2P_RECORD_SCHEMA=3' p2p.js
+          grep -q "trade:'0x1e6c598e'" p2p.js
+          grep -q "byRef:'0x0bb784d8'" p2p.js
           grep -q 'ARC TESTNET ONLY' base/protocol.html
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js
       - name: JavaScript syntax checks
@@ -73,6 +77,7 @@ jobs:
           set -euo pipefail
           test -s dist/index.html
           test -s dist/p2p.html
+          test -s dist/p2p.js
           test -s dist/agents.html
           test -s dist/protocol.html
           test -s dist/protocol.js
@@ -81,6 +86,12 @@ jobs:
           grep -q 'MasterlawEX' dist/index.html
           grep -q 'P2P · ARC TESTNET SANDBOX' dist/p2p.html
           grep -q 'ARC TESTNET · PRE-ESCROW' dist/p2p.html
+          grep -q 'Inspector escrow ARC · sólo lectura' dist/p2p.html
+          grep -q 'NO FIRMA · NO TX · NO MUEVE FONDOS' dist/p2p.html
+          grep -q 'tradeIdByReference(orderRef)' dist/p2p.html
+          grep -q "trade:'0x1e6c598e'" dist/p2p.js
+          grep -q "byRef:'0x0bb784d8'" dist/p2p.js
+          grep -q 'reverseLookupMatches:true' dist/p2p.js
           grep -q 'P2P ESCROW V1.3 · ARC TESTNET ONLY' dist/protocol.html
           grep -q 'Desplegar Escrow V1.3 en ARC' dist/protocol.html
           grep -q 'AI Control' dist/agents.html
