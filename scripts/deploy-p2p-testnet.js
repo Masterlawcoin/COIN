@@ -8,7 +8,7 @@ const ARC_TESTNET_CHAIN_ID = 5042002n;
 const ARC_TESTNET = {
   name: 'Arc Testnet',
   rpc: 'https://rpc.testnet.arc.io',
-  explorer: 'https://explorer.testnet.arc.io'
+  explorer: 'https://testnet.arcscan.app'
 };
 
 function required(name) {
@@ -73,7 +73,7 @@ async function main() {
   if (nativeBalance === 0n) throw new Error('Deployer has no native Arc Testnet gas balance');
 
   console.log(`Network: ${target.name} (${chainId})`);
-  console.log(`RPC: ${target.rpc}`);
+  console.log(`RPC: ${rpcUrl}`);
   console.log(`Deployer: ${deployer}`);
   console.log(`Asset: ${asset} (${symbol}, ${decimals} decimals)`);
   console.log(`Arbiter: ${arbiter}${arbiterCode === '0x' ? ' [EOA ARC sandbox override]' : ' [contract/multisig]'}`);
