@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MasterlawEX · P2P Mediation</title>
+  <link rel="stylesheet" href="/app.css">
+  <style>
+    .med-wrap{max-width:1240px;margin:0 auto;padding:18px}.med-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.med-card{border:1px solid var(--line,#2b3139);background:var(--panel,#151a21);border-radius:12px;padding:14px}.med-card h2,.med-card h3{margin:0 0 8px}.med-card p{color:var(--muted,#8a919e);font-size:12px}.med-status{display:inline-flex;align-items:center;border:1px solid #474d57;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.05em}.med-status.good{border-color:#0ecb81;color:#0ecb81}.med-status.bad{border-color:#f6465d;color:#f6465d}.med-status.warn{border-color:#f0b90b;color:#f0b90b}.med-form{display:grid;gap:10px}.med-form label{display:grid;gap:5px;font-size:11px;color:var(--muted,#8a919e)}.med-form input,.med-form select,.med-form textarea{width:100%;box-sizing:border-box;border:1px solid #2b3139;background:#0b0e11;color:#eaecef;border-radius:8px;padding:10px;font:inherit}.med-form textarea{min-height:94px;resize:vertical}.med-actions{display:flex;gap:8px;flex-wrap:wrap}.med-btn{border:1px solid #474d57;background:#181a20;color:#eaecef;border-radius:8px;padding:9px 12px;cursor:pointer;font-weight:700}.med-btn.primary{background:#f0b90b;color:#111;border-color:#f0b90b}.med-btn:disabled{opacity:.45;cursor:not-allowed}.med-output{white-space:pre-wrap;word-break:break-word;background:#0b0e11;border:1px solid #2b3139;border-radius:8px;padding:10px;min-height:72px;font:11px/1.5 ui-monospace,monospace}.med-banner{border:1px solid #6a541c;background:#211b09;color:#d8c47f;border-radius:10px;padding:11px 13px;margin-bottom:12px;font-size:12px}.med-kv{display:grid;grid-template-columns:150px 1fr;gap:7px;font-size:11px}.med-kv b{color:#eaecef}.med-kv span{color:#a7adb8;word-break:break-all}@media(max-width:800px){.med-grid{grid-template-columns:1fr}.med-kv{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header class="topbar"><a class="logo" href="/">MasterlawEX</a><nav><a href="/">Trade</a><a href="/p2p.html">P2P</a><a href="/protocol.html">Protocol</a><a class="active" href="/mediation.html">Mediation</a></nav><button class="connect" data-connect data-wallet>Conectar wallet</button></header>
+<main class="med-wrap">
+  <div class="med-banner"><b>ARC TESTNET · P2P V1.4 · PRE-REAL-MONEY</b><br>Consola operativa para verificación, KYC y preparación de acciones de mediación. No firma ni transmite arbitrajes; genera calldata para el multisig/smart-account de Masterlaw.</div>
+
+  <div class="med-grid">
+    <section class="med-card">
+      <h2>Masterlaw KYC Gate</h2>
+      <p>La identidad válida proviene de Masterlaw. Sin sesión/KYC verificado, P2P real permanece bloqueado.</p>
+      <div class="med-actions"><span id="apiHealth" class="med-status warn">API · CHECKING</span><span id="kycState" class="med-status bad">KYC · BLOCKED</span><span id="moneyState" class="med-status bad">REAL MONEY · OFF</span></div>
+      <div class="med-form" style="margin-top:12px">
+        <label>Token de sesión Masterlaw (sólo memoria de esta pestaña)<input id="masterlawToken" type="password" autocomplete="off" placeholder="Bearer JWT"></label>
+        <div class="med-actions"><button id="checkKyc" class="med-btn">Validar acceso KYC</button><button id="clearKyc" class="med-btn">Limpiar token</button></div>
+      </div>
+      <pre id="kycOutput" class="med-output">Esperando verificación Masterlaw…</pre>
+    </section>
+
+    <section class="med-card">
+      <h2>Escrow V1.4 ARC</h2>
+      <p>Verifica bytecode, versión, USDC, árbitro, dominios y build ABI antes de preparar cualquier mediación.</p>
+      <div class="med-form">
+        <label>Dirección escrow V1.4<input id="escrowAddress" placeholder="0x…"></label>
+        <label>Trade ID<input id="tradeId" inputmode="numeric" placeholder="1"></label>
+        <div class="med-actions"><button id="inspectEscrow" class="med-btn primary">Verificar + inspeccionar</button><a id="escrowExplorer" class="med-btn" target="_blank" rel="noreferrer" href="#">Explorer ARC</a></div>
+      </div>
+      <pre id="tradeOutput" class="med-output">Escrow no verificado.</pre>
+    </section>
+
+    <section class="med-card">
+      <h3>Congelar operación</h3>
+      <p>Genera <code>openDisputeByArbiter(tradeId, caseHash)</code>. El hash debe referenciar un expediente privado Masterlaw, nunca PII.</p>
+      <div class="med-form">
+        <label>Case hash bytes32<input id="caseHash" placeholder="0x + 64 hex"></label>
+        <button id="prepareFreeze" class="med-btn primary">Preparar Safe TX · Freeze</button>
+      </div>
+    </section>
+
+    <section class="med-card">
+      <h3>Resolver disputa</h3>
+      <p>Resolución binaria del árbitro: todo al comprador o devolución total al vendedor, anclada por <code>resolutionHash</code>.</p>
+      <div class="med-form">
+        <label>Decisión<select id="resolutionDecision"><option value="buyer">Liberar a comprador</option><option value="seller">Reembolsar a vendedor</option></select></label>
+        <label>Resolution hash bytes32<input id="resolutionHash" placeholder="0x + 64 hex"></label>
+        <button id="prepareResolve" class="med-btn primary">Preparar Safe TX · Resolve</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="med-card" style="margin-top:12px">
+    <h3>Payload multisig / smart-account</h3>
+    <div class="med-kv"><b>Regla</b><span>La consola nunca ejecuta resolve/freeze por sí sola. Requiere revisión humana y firma del árbitro configurado.</span><b>Red</b><span>Arc Testnet · chainId 5042002</span><b>Activo</b><span>USDC ARC 0x3600000000000000000000000000000000000000</span></div>
+    <pre id="safeOutput" class="med-output">Aún no se ha preparado ninguna transacción.</pre>
+    <div class="med-actions" style="margin-top:8px"><button id="copySafe" class="med-btn" disabled>Copiar payload</button><a class="med-btn" href="/p2p.html">Abrir P2P</a><a class="med-btn" href="/protocol.html">Abrir Protocol</a></div>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+<script src="/core.js"></script>
+<script src="/mediation-abi.js"></script>
+<script src="/mediation.js"></script>
+</body>
+</html>
