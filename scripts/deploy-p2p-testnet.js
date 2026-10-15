@@ -4,10 +4,8 @@ const { ethers } = require('ethers');
 
 const EXPECTED_VERSION = '1.3.0-testnet';
 const EXPECTED_ORDER_REF_DOMAIN = ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1'));
-const SUPPORTED_TESTNETS = new Map([
-  [5042002n, { name: 'Arc Testnet', explorer: 'https://explorer.testnet.arc.io' }],
-  [84532n, { name: 'Base Sepolia', explorer: 'https://sepolia.basescan.org' }]
-]);
+const ARC_TESTNET_CHAIN_ID = 5042002n;
+const ARC_TESTNET = { name: 'Arc Testnet', explorer: 'https://explorer.testnet.arc.io' };
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -31,15 +29,15 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const network = await provider.getNetwork();
   const chainId = BigInt(network.chainId);
-  const target = SUPPORTED_TESTNETS.get(chainId);
+  const target = ARC_TESTNET;
 
-  if (!target) {
-    throw new Error(`Refusing deployment on chain ${chainId}. Only Arc Testnet (5042002) and Base Sepolia (84532) are allowed.`);
+  if (chainId !== ARC_TESTNET_CHAIN_ID) {
+    throw new Error(`Refusing deployment on chain ${chainId}. MasterlawEX P2P is locked to Arc Testnet chainId ${ARC_TESTNET_CHAIN_ID}.`);
   }
 
   const expectedChain = String(process.env.P2P_EXPECTED_CHAIN_ID || '').trim();
-  if (expectedChain && BigInt(expectedChain) !== chainId) {
-    throw new Error(`RPC chain mismatch: expected ${expectedChain}, got ${chainId}`);
+  if (expectedChain && BigInt(expectedChain) !== ARC_TESTNET_CHAIN_ID) {
+    throw new Error(`P2P_EXPECTED_CHAIN_ID must be ${ARC_TESTNET_CHAIN_ID} for Arc Testnet`);
   }
 
   const assetCode = await provider.getCode(asset);
@@ -73,7 +71,7 @@ async function main() {
   const wallet = new ethers.Wallet(privateKey, provider);
   const deployer = await wallet.getAddress();
   const nativeBalance = await provider.getBalance(deployer);
-  if (nativeBalance === 0n) throw new Error('Deployer has no native testnet gas balance');
+  if (nativeBalance === 0n) throw new Error('Deployer has no native Arc Testnet gas balance');
 
   console.log(`Network: ${target.name} (${chainId})`);
   console.log(`Deployer: ${deployer}`);
