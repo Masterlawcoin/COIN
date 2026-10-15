@@ -90,7 +90,7 @@ function equal(actual, expected, label) {
     const id = await escrow.nextTradeId();
     await (await escrow.createTrade(who, value, timeout, reference)).wait();
     const stored = await escrow.trades(id);
-    equal(stored.reference, reference, 'trade reference stored');
+    equal(stored.orderRef, reference, 'trade reference stored');
     equal(await escrow.tradeIdByReference(reference), id, 'reference reverse lookup');
     return id;
   };
