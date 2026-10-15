@@ -102,6 +102,10 @@ jobs:
           grep -q 'const realMoneyEnabled=false' mediation-admin.js
           grep -q 'supabase_mutation_performed:false' mediation-admin.js
           grep -q 'browser_arbitration_broadcast:false' mediation-admin.js
+          grep -q 'MASTERLAWEX_RELEASE_V1' build.js
+          grep -q 'VERCEL_GIT_COMMIT_SHA' build.js
+          grep -q "fetch('/release.json'" mediation-admin.js
+          grep -q 'release_manifest_verified' mediation-admin.js
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' mediation.js
           ! grep -E 'localStorage|sessionStorage' mediation-admin.js
           ! grep -E 'eth_sendTransaction|private[_ -]?key|secretKey' mediation-admin.js
@@ -132,6 +136,7 @@ jobs:
           test -s dist/mediation.js
           test -s dist/mediation-admin.js
           test -s dist/mediation-abi.js
+          test -s dist/release.json
           test -s dist/app.css
           test -s dist/core.js
           grep -q 'MasterlawEX' dist/index.html
@@ -160,6 +165,10 @@ jobs:
           grep -q 'CASE STORE · BLOCKED' dist/mediation-admin.js
           grep -q 'const serverEntitlementEnforced=false' dist/mediation-admin.js
           grep -q 'const casePersistenceEnabled=false' dist/mediation-admin.js
+          grep -q 'MASTERLAWEX_RELEASE_V1' dist/release.json
+          grep -q '"chain_id": 5042002' dist/release.json
+          grep -q '"real_money_enabled": false' dist/release.json
+          node -e "const r=require('./dist/release.json'); if(r.schema!=='MASTERLAWEX_RELEASE_V1'||r.chain_id!==5042002||r.real_money_enabled!==false) process.exit(1)"
           grep -q 'openDisputeByArbiter(uint256,bytes32)' dist/mediation-abi.js
           grep -q 'resolveDispute(uint256,bool,bytes32)' dist/mediation-abi.js
           grep -q 'broadcastByBrowser:false' dist/mediation.js
@@ -175,4 +184,4 @@ jobs:
           grep -q 'ensureChain,wait,send' dist/core.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 26 || { echo "Expected 26 dist files, found $count"; exit 1; }
+          test "$count" -eq 27 || { echo "Expected 27 dist files, found $count"; exit 1; }
