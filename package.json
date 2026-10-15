@@ -1,14 +1,17 @@
 {
   "name": "masterlawex-protocol",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "build": "node scripts/compile.js",
     "test": "node test/core.test.js && node test/p2p.test.js"
   },
   "dependencies": {
-    "ethers": "^6.15.0",
-    "ganache": "^7.9.2",
+    "ethers": "6.17.0",
+    "ganache": "7.9.2",
     "solc": "0.8.24"
   }
 }
