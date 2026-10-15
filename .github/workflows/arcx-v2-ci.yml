@@ -90,7 +90,7 @@ jobs:
           const { ethers } = require('ethers');
           const protocol = fs.readFileSync('web-overlay/base/protocol.js', 'utf8');
           const p2p = fs.readFileSync('web-overlay/p2p.js', 'utf8');
-          const selectors = {
+          const protocolSelectors = {
             asset: ethers.id('asset()').slice(0, 10),
             arbiter: ethers.id('arbiter()').slice(0, 10),
             version: ethers.id('VERSION()').slice(0, 10),
@@ -98,21 +98,25 @@ jobs:
             decimals: ethers.id('decimals()').slice(0, 10),
             symbol: ethers.id('symbol()').slice(0, 10)
           };
-          for (const [name, selector] of Object.entries(selectors)) {
-            if (!protocol.includes(`${name}:'${selector}'`)) {
-              throw new Error(`Protocol browser selector mismatch for ${name}: expected ${selector}`);
-            }
+          for (const [name, selector] of Object.entries(protocolSelectors)) {
+            if (!protocol.includes(`${name}:'${selector}'`)) throw new Error(`Protocol browser selector mismatch for ${name}: expected ${selector}`);
           }
-          for (const name of ['asset', 'arbiter', 'version', 'domain']) {
-            const selector = selectors[name];
-            if (!p2p.includes(`${name}:'${selector}'`)) {
-              throw new Error(`P2P browser selector mismatch for ${name}: expected ${selector}`);
-            }
+          const p2pSelectors = {
+            asset: protocolSelectors.asset,
+            arbiter: protocolSelectors.arbiter,
+            version: protocolSelectors.version,
+            domain: protocolSelectors.domain,
+            trade: ethers.id('trades(uint256)').slice(0, 10),
+            byRef: ethers.id('tradeIdByReference(bytes32)').slice(0, 10)
+          };
+          for (const [name, selector] of Object.entries(p2pSelectors)) {
+            if (!p2p.includes(`${name}:'${selector}'`)) throw new Error(`P2P browser selector mismatch for ${name}: expected ${selector}`);
           }
           const domain = ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1'));
           if (!protocol.includes(`P2P_ORDER_REF_DOMAIN='${domain}'`)) throw new Error('Protocol order-ref domain mismatch');
           if (!p2p.includes(`P2P_DOMAIN='${domain}'`)) throw new Error('P2P order-ref domain mismatch');
-          console.log('P2P BROWSER ABI LOCK PASS', selectors, domain);
+          if (!p2p.includes("P2P_RECORD_SCHEMA=3")) throw new Error('P2P deployment record schema lock missing');
+          console.log('P2P BROWSER ABI LOCK PASS', { protocolSelectors, p2pSelectors, domain });
           NODE
       - name: Validate ARC deployment tooling
         run: node --check scripts/deploy-p2p-testnet.js
