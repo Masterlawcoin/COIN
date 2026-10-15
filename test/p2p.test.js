@@ -11,15 +11,16 @@ pragma solidity ^0.8.24;
 contract MockUSDC {
   string public name='USD Coin'; string public symbol='USDC'; uint8 public constant decimals=6;
   uint public totalSupply; mapping(address=>uint) public balanceOf; mapping(address=>mapping(address=>uint)) public allowance;
-  bool public failTransfer; bool public failTransferFrom;
+  bool public failTransfer; bool public failTransferFrom; uint public feeBps;
   event Transfer(address indexed from,address indexed to,uint value); event Approval(address indexed owner,address indexed spender,uint value);
   constructor(){_mint(msg.sender,1000000e6);}
   function setFailures(bool transferFail,bool transferFromFail) external { failTransfer=transferFail; failTransferFrom=transferFromFail; }
+  function setFeeBps(uint bps) external { require(bps<=1000,'fee'); feeBps=bps; }
   function _mint(address to,uint a) internal { balanceOf[to]+=a; totalSupply+=a; emit Transfer(address(0),to,a); }
   function transfer(address to,uint a) external returns(bool){ if(failTransfer)return false; _move(msg.sender,to,a); return true; }
   function approve(address s,uint a) external returns(bool){ allowance[msg.sender][s]=a; emit Approval(msg.sender,s,a); return true; }
   function transferFrom(address f,address t,uint a) external returns(bool){ if(failTransferFrom)return false; uint x=allowance[f][msg.sender]; require(x>=a,'allowance'); if(x!=type(uint).max)allowance[f][msg.sender]=x-a; _move(f,t,a); return true; }
-  function _move(address f,address t,uint a) internal { require(balanceOf[f]>=a,'balance'); balanceOf[f]-=a; balanceOf[t]+=a; emit Transfer(f,t,a); }
+  function _move(address f,address t,uint a) internal { require(balanceOf[f]>=a,'balance'); uint fee=a*feeBps/10000; uint net=a-fee; balanceOf[f]-=a; balanceOf[t]+=net; if(fee>0)totalSupply-=fee; emit Transfer(f,t,net); if(fee>0)emit Transfer(f,address(0),fee); }
 }`;
   const input = {
     language: 'Solidity',
@@ -97,6 +98,15 @@ function equal(actual, expected, label) {
   await mustRevert(() => escrow.createTrade(buyerAddr, 0, 900), 'zero amount');
   await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599), 'timeout too short');
   await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401), 'timeout too long');
+
+  // Exact funding: a fee-on-transfer asset cannot make escrow accounting insolvent.
+  const nextBeforeFee = await escrow.nextTradeId();
+  const escrowBeforeFee = await usdc.balanceOf(escrowAddr);
+  await (await usdc.setFeeBps(100)).wait();
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 2n, 901), 'fee-on-transfer funding');
+  equal(await escrow.nextTradeId(), nextBeforeFee, 'failed fee funding rolls back trade id');
+  equal(await usdc.balanceOf(escrowAddr), escrowBeforeFee, 'failed fee funding rolls back balance');
+  await (await usdc.setFeeBps(0)).wait();
 
   // Use dedicated trades for expected reverts so Ganache cannot reuse a stale eth_estimateGas rejection
   // when the same calldata later becomes valid after a state/time change.
@@ -178,6 +188,20 @@ function equal(actual, expected, label) {
   await (await escrow.connect(arbiter).resolveDispute(trade6, false)).wait();
   equal((await escrow.trades(trade6)).state, 6n, 'failed-release trade safely resolved');
 
+  // Exact payout: a token that begins charging a fee after funding cannot short-change the recipient.
+  const tradeFeeOut = await create(902, amount + 3n);
+  await (await escrow.connect(buyer).markPaymentSent(tradeFeeOut)).wait();
+  const escrowBeforeFeeOut = await usdc.balanceOf(escrowAddr);
+  const buyerBeforeFeeOut = await usdc.balanceOf(buyerAddr);
+  await (await usdc.setFeeBps(100)).wait();
+  await mustRevert(() => escrow.release(tradeFeeOut), 'fee-on-transfer payout');
+  equal((await escrow.trades(tradeFeeOut)).state, 2n, 'fee payout state rollback');
+  equal(await usdc.balanceOf(escrowAddr), escrowBeforeFeeOut, 'fee payout escrow balance rollback');
+  equal(await usdc.balanceOf(buyerAddr), buyerBeforeFeeOut, 'fee payout recipient balance rollback');
+  await (await usdc.setFeeBps(0)).wait();
+  await (await escrow.openDispute(tradeFeeOut)).wait();
+  await (await escrow.connect(arbiter).resolveDispute(tradeFeeOut, false)).wait();
+
   // Pausing blocks only new trades; existing escrow lifecycle remains available.
   const trade7 = await create();
   await mustRevert(() => escrow.connect(outsider).setNewTradesPaused(true), 'non-arbiter pause');
@@ -200,7 +224,7 @@ function equal(actual, expected, label) {
   await (await escrow.connect(nextArbiter).setNewTradesPaused(true)).wait();
   await (await escrow.connect(nextArbiter).setNewTradesPaused(false)).wait();
 
-  console.log('MASTERLAWEX P2P ESCROW ADVERSARIAL TEST PASS');
+  console.log('MASTERLAWEX P2P ESCROW V1.1 ADVERSARIAL TEST PASS');
 })().catch(e => {
   console.error(e);
   process.exit(1);
