@@ -7,10 +7,12 @@ interface IMLXERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-/// @title MasterlawEX P2P Escrow V1.1
+/// @title MasterlawEX P2P Escrow V1.2
 /// @notice Non-custodial USDC escrow candidate for EVM testnet P2P trades.
 /// @dev No fiat settlement is performed on-chain. The contract only controls the crypto leg.
 ///      Exact balance-delta checks intentionally reject fee-on-transfer/rebasing assets.
+///      Each escrow is bound to one unique external reference hash so the off-chain P2P order
+///      can be reconciled unambiguously without publishing private order metadata on-chain.
 contract MasterlawEXP2PEscrow {
     enum State { None, Funded, PaymentMarked, Released, Cancelled, Disputed, Refunded }
 
@@ -21,6 +23,7 @@ contract MasterlawEXP2PEscrow {
         uint64 createdAt;
         uint64 deadline;
         State state;
+        bytes32 reference;
     }
 
     IMLXERC20 public immutable asset;
@@ -29,10 +32,11 @@ contract MasterlawEXP2PEscrow {
     bool public newTradesPaused;
     uint256 public nextTradeId = 1;
     mapping(uint256 => Trade) public trades;
+    mapping(bytes32 => uint256) public tradeIdByReference;
 
     uint256 private _lock = 1;
 
-    event TradeCreated(uint256 indexed tradeId, address indexed seller, address indexed buyer, uint256 amount, uint64 deadline);
+    event TradeCreated(uint256 indexed tradeId, bytes32 indexed reference, address indexed seller, address buyer, uint256 amount, uint64 deadline);
     event PaymentMarked(uint256 indexed tradeId, address indexed buyer);
     event Released(uint256 indexed tradeId, address indexed buyer, uint256 amount);
     event Cancelled(uint256 indexed tradeId, address indexed by, uint256 amount);
@@ -47,6 +51,8 @@ contract MasterlawEXP2PEscrow {
     error InvalidAddress();
     error InvalidAmount();
     error InvalidTimeout();
+    error InvalidReference();
+    error ReferenceInUse();
     error DeadlinePassed();
     error DeadlineNotPassed();
     error Paused();
@@ -72,13 +78,15 @@ contract MasterlawEXP2PEscrow {
         arbiter = arbiter_;
     }
 
-    /// @notice Seller locks the exact asset amount for a specific buyer.
+    /// @notice Seller locks the exact asset amount for a specific buyer and external order reference.
     /// @dev Timeout must be between 10 minutes and 24 hours. Fee-on-transfer assets are rejected.
-    function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds) external nonReentrant returns (uint256 tradeId) {
+    function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds, bytes32 reference) external nonReentrant returns (uint256 tradeId) {
         if (newTradesPaused) revert Paused();
         if (buyer == address(0) || buyer == msg.sender) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (timeoutSeconds < 10 minutes || timeoutSeconds > 24 hours) revert InvalidTimeout();
+        if (reference == bytes32(0)) revert InvalidReference();
+        if (tradeIdByReference[reference] != 0) revert ReferenceInUse();
 
         tradeId = nextTradeId++;
         uint64 nowTs = uint64(block.timestamp);
@@ -89,11 +97,13 @@ contract MasterlawEXP2PEscrow {
             amount: amount,
             createdAt: nowTs,
             deadline: deadline,
-            state: State.Funded
+            state: State.Funded,
+            reference: reference
         });
+        tradeIdByReference[reference] = tradeId;
 
         _safeTransferFromExact(msg.sender, amount);
-        emit TradeCreated(tradeId, msg.sender, buyer, amount, deadline);
+        emit TradeCreated(tradeId, reference, msg.sender, buyer, amount, deadline);
     }
 
     /// @notice Buyer declares that the off-chain fiat leg has been sent. This does not prove fiat settlement.
