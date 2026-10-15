@@ -5,7 +5,11 @@ const { ethers } = require('ethers');
 const EXPECTED_VERSION = '1.3.0-testnet';
 const EXPECTED_ORDER_REF_DOMAIN = ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1'));
 const ARC_TESTNET_CHAIN_ID = 5042002n;
-const ARC_TESTNET = { name: 'Arc Testnet', explorer: 'https://explorer.testnet.arc.io' };
+const ARC_TESTNET = {
+  name: 'Arc Testnet',
+  rpc: 'https://rpc.testnet.arc.io',
+  explorer: 'https://explorer.testnet.arc.io'
+};
 
 function required(name) {
   const value = String(process.env[name] || '').trim();
@@ -22,7 +26,7 @@ function addressEnv(name) {
 }
 
 async function main() {
-  const rpcUrl = required('P2P_RPC_URL');
+  const rpcUrl = String(process.env.P2P_RPC_URL || ARC_TESTNET.rpc).trim();
   const privateKey = required('P2P_DEPLOYER_PRIVATE_KEY');
   const asset = addressEnv('P2P_ASSET_ADDRESS');
   const arbiter = addressEnv('P2P_ARBITER_ADDRESS');
@@ -32,16 +36,11 @@ async function main() {
   const target = ARC_TESTNET;
 
   if (chainId !== ARC_TESTNET_CHAIN_ID) {
-    throw new Error(`Refusing deployment on chain ${chainId}. MasterlawEX P2P is locked to Arc Testnet chainId ${ARC_TESTNET_CHAIN_ID}.`);
-  }
-
-  const expectedChain = String(process.env.P2P_EXPECTED_CHAIN_ID || '').trim();
-  if (expectedChain && BigInt(expectedChain) !== ARC_TESTNET_CHAIN_ID) {
-    throw new Error(`P2P_EXPECTED_CHAIN_ID must be ${ARC_TESTNET_CHAIN_ID} for Arc Testnet`);
+    throw new Error(`Refusing deployment on chain ${chainId}. MasterlawEX is ARC-only and requires Arc Testnet chainId ${ARC_TESTNET_CHAIN_ID}.`);
   }
 
   const assetCode = await provider.getCode(asset);
-  if (assetCode === '0x') throw new Error('P2P_ASSET_ADDRESS is not a deployed contract');
+  if (assetCode === '0x') throw new Error('P2P_ASSET_ADDRESS is not a deployed contract on Arc Testnet');
 
   const token = new ethers.Contract(asset, [
     'function decimals() view returns (uint8)',
@@ -55,7 +54,7 @@ async function main() {
   const arbiterCode = await provider.getCode(arbiter);
   const allowEoaArbiter = String(process.env.P2P_ALLOW_EOA_ARBITER || '').toLowerCase() === 'true';
   if (arbiterCode === '0x' && !allowEoaArbiter) {
-    throw new Error('Arbiter is an EOA. Use a multisig/smart-account address, or explicitly set P2P_ALLOW_EOA_ARBITER=true for sandbox-only testing.');
+    throw new Error('Arbiter is an EOA. Use a multisig/smart-account address, or explicitly set P2P_ALLOW_EOA_ARBITER=true for ARC sandbox-only testing.');
   }
 
   const artifactPath = path.join(__dirname, '..', 'build', 'artifacts.json');
@@ -74,9 +73,10 @@ async function main() {
   if (nativeBalance === 0n) throw new Error('Deployer has no native Arc Testnet gas balance');
 
   console.log(`Network: ${target.name} (${chainId})`);
+  console.log(`RPC: ${target.rpc}`);
   console.log(`Deployer: ${deployer}`);
   console.log(`Asset: ${asset} (${symbol}, ${decimals} decimals)`);
-  console.log(`Arbiter: ${arbiter}${arbiterCode === '0x' ? ' [EOA sandbox override]' : ' [contract/multisig]'}`);
+  console.log(`Arbiter: ${arbiter}${arbiterCode === '0x' ? ' [EOA ARC sandbox override]' : ' [contract/multisig]'}`);
   console.log(`Build ID: ${artifacts._meta.buildId}`);
 
   const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, wallet);
@@ -101,10 +101,10 @@ async function main() {
   const localOrderRef = ethers.keccak256(
     ethers.AbiCoder.defaultAbiCoder().encode(
       ['bytes32', 'uint256', 'address', 'bytes32'],
-      [EXPECTED_ORDER_REF_DOMAIN, chainId, address, probeExternalId]
+      [EXPECTED_ORDER_REF_DOMAIN, ARC_TESTNET_CHAIN_ID, address, probeExternalId]
     )
   );
-  if (contractOrderRef !== localOrderRef) throw new Error('Post-deploy order-reference derivation mismatch');
+  if (contractOrderRef !== localOrderRef) throw new Error('Post-deploy ARC order-reference derivation mismatch');
 
   const onChainCode = await provider.getCode(address);
   if (onChainCode === '0x') throw new Error('Deployment receipt confirmed but contract code is empty');
@@ -114,7 +114,7 @@ async function main() {
     contract: 'MasterlawEXP2PEscrow',
     version: verifiedVersion,
     network: target.name,
-    chainId: chainId.toString(),
+    chainId: ARC_TESTNET_CHAIN_ID.toString(),
     address,
     deploymentTx: deploymentTx.hash,
     blockNumber: receipt.blockNumber,
@@ -123,7 +123,7 @@ async function main() {
     assetSymbol: symbol,
     assetDecimals: decimals,
     arbiter,
-    arbiterType: arbiterCode === '0x' ? 'EOA_SANDBOX_OVERRIDE' : 'CONTRACT_OR_MULTISIG',
+    arbiterType: arbiterCode === '0x' ? 'EOA_ARC_SANDBOX_OVERRIDE' : 'CONTRACT_OR_MULTISIG',
     orderRefDomain: verifiedDomain,
     buildId: artifacts._meta.buildId,
     sourceHashes: artifacts._meta.sourceHashes,
@@ -132,14 +132,14 @@ async function main() {
 
   const outDir = path.join(__dirname, '..', 'build', 'deployments');
   fs.mkdirSync(outDir, { recursive: true });
-  const outFile = path.join(outDir, `p2p-${chainId}.json`);
+  const outFile = path.join(outDir, 'p2p-arc-testnet.json');
   fs.writeFileSync(outFile, JSON.stringify(record, null, 2) + '\n');
-  console.log(`Escrow ${verifiedVersion} deployed: ${address}`);
+  console.log(`Escrow ${verifiedVersion} deployed on ARC: ${address}`);
   console.log(`${target.explorer}/address/${address}`);
   console.log(`Deployment record: ${path.relative(process.cwd(), outFile)}`);
 }
 
 main().catch(error => {
-  console.error(`P2P DEPLOY ABORTED: ${error.message}`);
+  console.error(`ARC P2P DEPLOY ABORTED: ${error.message}`);
   process.exit(1);
 });
