@@ -27,7 +27,7 @@ const input = {
   },
   settings: {
     optimizer,
-    outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object'] } }
+    outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object', 'evm.methodIdentifiers'] } }
   }
 };
 const output = JSON.parse(solc.compile(JSON.stringify(input)));
@@ -52,6 +52,7 @@ for (const [file,name] of specs) {
   artifacts[name] = {
     source: 'contracts/' + file,
     abi: c.abi,
+    methodIdentifiers: c.evm.methodIdentifiers || {},
     bytecode,
     deployedBytecode,
     bytecodeSha256: sha256(bytecode),
