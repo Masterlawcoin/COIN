@@ -46,6 +46,8 @@ jobs:
             echo "Bootstrapping package-lock.json once from exact dependency pins"
             npm install --no-audit --no-fund
           fi
+      - name: Validate deployment tooling
+        run: node --check scripts/deploy-p2p-testnet.js
       - name: Compile Solidity
         run: npm run build
       - name: Verify deterministic build
@@ -54,6 +56,7 @@ jobs:
           cp build/artifacts.json /tmp/artifacts.first.json
           npm run build
           cmp /tmp/artifacts.first.json build/artifacts.json
+          node -e "const a=require('./build/artifacts.json'); if(a._meta?.schema!==2||!a._meta?.buildId||!a.MasterlawEXP2PEscrow?.bytecodeSha256) process.exit(1)"
           sha256sum build/artifacts.json
       - name: Integration test
         run: npm test
