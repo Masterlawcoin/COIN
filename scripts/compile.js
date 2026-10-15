@@ -7,9 +7,11 @@ const sha256 = value => '0x' + crypto.createHash('sha256').update(value).digest(
 const optimizer = { enabled: true, runs: 200 };
 const core = fs.readFileSync(path.join(__dirname, '..', 'contracts', 'ARCXV2.sol'), 'utf8');
 const p2p = fs.readFileSync(path.join(__dirname, '..', 'contracts', 'MasterlawEXP2PEscrow.sol'), 'utf8');
+const p2pV14 = fs.readFileSync(path.join(__dirname, '..', 'contracts', 'MasterlawEXP2PEscrowV14.sol'), 'utf8');
 const sourceHashes = {
   'contracts/ARCXV2.sol': sha256(core),
-  'contracts/MasterlawEXP2PEscrow.sol': sha256(p2p)
+  'contracts/MasterlawEXP2PEscrow.sol': sha256(p2p),
+  'contracts/MasterlawEXP2PEscrowV14.sol': sha256(p2pV14)
 };
 const buildDescriptor = {
   compiler: solc.version(),
@@ -18,7 +20,11 @@ const buildDescriptor = {
 };
 const input = {
   language: 'Solidity',
-  sources: { 'ARCXV2.sol': { content: core }, 'MasterlawEXP2PEscrow.sol': { content: p2p } },
+  sources: {
+    'ARCXV2.sol': { content: core },
+    'MasterlawEXP2PEscrow.sol': { content: p2p },
+    'MasterlawEXP2PEscrowV14.sol': { content: p2pV14 }
+  },
   settings: {
     optimizer,
     outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object'] } }
@@ -29,7 +35,8 @@ for (const e of output.errors || []) console.log(e.severity.toUpperCase(), e.for
 if ((output.errors || []).some(e => e.severity === 'error')) process.exit(1);
 const specs = [
   ['ARCXV2.sol','ARCXTokenFactory'],['ARCXV2.sol','ARCXMarketFactory'],['ARCXV2.sol','ARCXRouter'],['ARCXV2.sol','ARCXPair'],['ARCXV2.sol','ARCXToken'],
-  ['MasterlawEXP2PEscrow.sol','MasterlawEXP2PEscrow']
+  ['MasterlawEXP2PEscrow.sol','MasterlawEXP2PEscrow'],
+  ['MasterlawEXP2PEscrowV14.sol','MasterlawEXP2PEscrowV14']
 ];
 const artifacts = {
   _meta: {
