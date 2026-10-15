@@ -98,8 +98,8 @@ function equal(actual, expected, label) {
   await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599), 'timeout too short');
   await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401), 'timeout too long');
 
-  // Release cannot happen before buyer marks payment. Use a dedicated trade so a failed eth_estimateGas
-  // for release(id) cannot be reused by local RPC caches for a later valid release of the same id.
+  // Use dedicated trades for expected reverts so Ganache cannot reuse a stale eth_estimateGas rejection
+  // when the same calldata later becomes valid after a state/time change.
   const preReleaseTrade = await create();
   await mustRevert(() => escrow.release(preReleaseTrade), 'seller cannot release before payment');
   await (await escrow.connect(buyer).cancelByBuyer(preReleaseTrade)).wait();
@@ -128,10 +128,13 @@ function equal(actual, expected, label) {
   equal((await escrow.trades(trade2)).state, 4n, 'cancelled state');
   await mustRevert(() => escrow.connect(buyer).cancelByBuyer(trade2), 'double cancel');
 
-  // Expiry: payment cannot be marked after the deadline; seller can reclaim only after expiry.
+  // Early reclaim check uses its own trade; the real expired reclaim uses another trade id.
+  const earlyExpiryTrade = await create(600);
+  await mustRevert(() => escrow.cancelExpired(earlyExpiryTrade), 'early seller reclaim');
+  await (await escrow.connect(buyer).cancelByBuyer(earlyExpiryTrade)).wait();
+
   const sellerBefore3 = await usdc.balanceOf(sellerAddr);
   const trade3 = await create(600);
-  await mustRevert(() => escrow.cancelExpired(trade3), 'early seller reclaim');
   await provider.send('evm_increaseTime', [601]);
   await provider.send('evm_mine', []);
   await mustRevert(() => escrow.connect(buyer).markPaymentSent(trade3), 'late payment mark');
@@ -161,9 +164,9 @@ function equal(actual, expected, label) {
   equal(await usdc.balanceOf(sellerAddr), sellerBefore5, 'arbiter seller refund');
   equal((await escrow.trades(trade5)).state, 6n, 'refunded state');
 
-  // ERC-20 failures must revert atomically; state changes cannot survive a failed token transfer.
+  // ERC-20 failures must revert atomically; use a distinct amount for the expected transferFrom failure.
   await (await usdc.setFailures(false, true)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900), 'transferFrom false');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 1n, 900), 'transferFrom false');
   await (await usdc.setFailures(false, false)).wait();
   const trade6 = await create();
   await (await escrow.connect(buyer).markPaymentSent(trade6)).wait();
