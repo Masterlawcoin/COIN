@@ -1,0 +1,39 @@
+name: ARCX V2 CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'package.json'
+      - '.github/workflows/arcx-v2-ci.yml'
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'test/**'
+      - 'package.json'
+
+jobs:
+  compile-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Compile Solidity
+        run: npm run build
+      - name: Integration test
+        run: npm test
+      - name: Upload compiled artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arcx-v2-artifacts
+          path: build/artifacts.json
+          retention-days: 14
