@@ -8,7 +8,7 @@
   "scripts": {
     "build": "node scripts/compile.js",
     "test": "node test/core.test.js && node test/p2p.test.js",
-    "deploy:p2p:testnet": "node scripts/deploy-p2p-testnet.js"
+    "deploy:p2p:arc": "node scripts/deploy-p2p-testnet.js"
   },
   "dependencies": {
     "ethers": "6.17.0",
