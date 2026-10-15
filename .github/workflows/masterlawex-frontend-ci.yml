@@ -57,7 +57,7 @@ jobs:
           test -s mediation.js
           ! grep -q 'https://arcx-exchange.vercel.app' build.js
           ! grep -q 'fetch(' build.js
-      - name: Validate ARC network configuration
+      - name: Validate ARC network and identity configuration
         shell: bash
         run: |
           set -euo pipefail
@@ -78,8 +78,14 @@ jobs:
           grep -q "byRef:'0x0bb784d8'" p2p.js
           grep -q 'ARC TESTNET ONLY' base/protocol.html
           grep -q "MASTERLAW_API='https://masterlaw-api.vercel.app'" mediation.js
+          grep -q "P2P_SESSION_KEY='masterlawex:p2p:session:v1'" mediation.js
+          grep -q '/api/exchange/p2p/bind-wallet' mediation.js
+          grep -q "entitlement:'\[MEMORY_ONLY\]'" mediation.js
+          grep -q 'WALLET · UNBOUND' mediation.html
+          grep -q 'Vincular wallet ARC' mediation.html
           grep -q 'REAL MONEY · OFF' mediation.html
           grep -q 'broadcastByBrowser:false' mediation.js
+          ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' mediation.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js mediation.html mediation.js
       - name: JavaScript syntax checks
         run: |
@@ -119,10 +125,15 @@ jobs:
           grep -q 'P2P ESCROW V1.3 · ARC TESTNET ONLY' dist/protocol.html
           grep -q 'Desplegar Escrow V1.3 en ARC' dist/protocol.html
           grep -q 'P2P V1.4 · PRE-REAL-MONEY' dist/mediation.html
+          grep -q 'Masterlaw KYC + Wallet Gate' dist/mediation.html
+          grep -q 'Vincular wallet ARC' dist/mediation.html
+          grep -q '/api/exchange/p2p/bind-wallet' dist/mediation.js
+          grep -q "entitlement:'\[MEMORY_ONLY\]'" dist/mediation.js
           grep -q 'openDisputeByArbiter(uint256,bytes32)' dist/mediation-abi.js
           grep -q 'resolveDispute(uint256,bool,bytes32)' dist/mediation-abi.js
           grep -q 'broadcastByBrowser:false' dist/mediation.js
           ! grep -q 'eth_sendTransaction' dist/mediation.js
+          ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' dist/mediation.js
           grep -q 'AI Control' dist/agents.html
           grep -q "chain:'0x4cef52'" dist/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" dist/core.js
