@@ -9,6 +9,8 @@ on:
       - 'deploy/**'
       - 'docs/P2P_ESCROW_INTEGRATION.md'
       - 'web-overlay/base/core.js'
+      - 'web-overlay/base/protocol.js'
+      - 'web-overlay/p2p.js'
       - 'test/**'
       - 'package.json'
       - 'package-lock.json'
@@ -20,6 +22,8 @@ on:
       - 'deploy/**'
       - 'docs/P2P_ESCROW_INTEGRATION.md'
       - 'web-overlay/base/core.js'
+      - 'web-overlay/base/protocol.js'
+      - 'web-overlay/p2p.js'
       - 'test/**'
       - 'package.json'
       - 'package-lock.json'
@@ -77,6 +81,38 @@ jobs:
             if (!deployer.includes(value)) throw new Error(`ARC deploy lock missing: ${value}`);
           }
           console.log('ARC-ONLY NETWORK LOCK PASS');
+          NODE
+      - name: Verify P2P browser ABI lock
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { ethers } = require('ethers');
+          const protocol = fs.readFileSync('web-overlay/base/protocol.js', 'utf8');
+          const p2p = fs.readFileSync('web-overlay/p2p.js', 'utf8');
+          const selectors = {
+            asset: ethers.id('asset()').slice(0, 10),
+            arbiter: ethers.id('arbiter()').slice(0, 10),
+            version: ethers.id('VERSION()').slice(0, 10),
+            domain: ethers.id('ORDER_REF_DOMAIN()').slice(0, 10),
+            decimals: ethers.id('decimals()').slice(0, 10),
+            symbol: ethers.id('symbol()').slice(0, 10)
+          };
+          for (const [name, selector] of Object.entries(selectors)) {
+            if (!protocol.includes(`${name}:'${selector}'`)) {
+              throw new Error(`Protocol browser selector mismatch for ${name}: expected ${selector}`);
+            }
+          }
+          for (const name of ['asset', 'arbiter', 'version', 'domain']) {
+            const selector = selectors[name];
+            if (!p2p.includes(`${name}:'${selector}'`)) {
+              throw new Error(`P2P browser selector mismatch for ${name}: expected ${selector}`);
+            }
+          }
+          const domain = ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1'));
+          if (!protocol.includes(`P2P_ORDER_REF_DOMAIN='${domain}'`)) throw new Error('Protocol order-ref domain mismatch');
+          if (!p2p.includes(`P2P_DOMAIN='${domain}'`)) throw new Error('P2P order-ref domain mismatch');
+          console.log('P2P BROWSER ABI LOCK PASS', selectors, domain);
           NODE
       - name: Validate ARC deployment tooling
         run: node --check scripts/deploy-p2p-testnet.js
