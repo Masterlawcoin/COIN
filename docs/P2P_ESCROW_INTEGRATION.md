@@ -1,6 +1,6 @@
-# MasterlawEX P2P Escrow Integration — Testnet V1.3
+# MasterlawEX P2P Escrow Integration — ARC Testnet V1.3
 
-> Status: PRE-DEPLOY / TESTNET ONLY. This document defines the integration contract between the P2P application and `MasterlawEXP2PEscrow`. It does not authorize real-money operation or mainnet use.
+> Status: PRE-DEPLOY / ARC TESTNET ONLY. MasterlawEX P2P is locked to Arc Testnet (`chainId 5042002`). This document defines the integration contract between the P2P application and `MasterlawEXP2PEscrow`. It does not authorize real-money operation or mainnet use.
 
 ## Security objective
 
@@ -30,7 +30,7 @@ ORDER_REF_DOMAIN = keccak256("MASTERLAWEX_P2P_ORDER_REF_V1")
 orderRef = keccak256(
   abi.encode(
     ORDER_REF_DOMAIN,
-    chainId,
+    5042002,
     escrowContractAddress,
     externalTradeIdHash
   )
@@ -39,13 +39,13 @@ orderRef = keccak256(
 
 The contract function `computeOrderRef(bytes32)` is authoritative. The backend/frontend may compute the same value locally, but must compare it with the contract result before accepting it.
 
-This makes the same backend trade identifier produce a different `orderRef` on a different chain or a different escrow contract.
+MasterlawEX P2P does not support alternate chains in this deployment path. A wallet/RPC reporting any chain other than Arc Testnet `5042002` must be rejected.
 
 ## Required deployment identity
 
 Before enabling on-chain P2P actions, configuration must include and verify:
 
-- chain ID
+- chain ID = `5042002` (Arc Testnet)
 - escrow contract address
 - escrow runtime `VERSION()`
 - `ORDER_REF_DOMAIN()`
@@ -60,7 +60,7 @@ A mismatch disables escrow actions.
 
 1. Backend creates/reserves the P2P trade and assigns its UUID.
 2. Backend derives `externalTradeIdHash` using the canonical rule above.
-3. Frontend connects the seller wallet on the configured testnet.
+3. Frontend connects the seller wallet on Arc Testnet (`5042002`).
 4. Frontend reads `VERSION()`, `asset()`, `arbiter()`, `ORDER_REF_DOMAIN()` and `computeOrderRef(externalTradeIdHash)`.
 5. Seller approves the exact USDC amount to the escrow contract.
 6. Seller calls:
@@ -71,7 +71,7 @@ createTrade(buyer, amount, timeoutSeconds, externalTradeIdHash)
 
 7. Client waits for a confirmed receipt and extracts `TradeCreated`.
 8. Backend/indexer verifies all of the following against the reserved database trade:
-   - expected chain ID
+   - chain ID = `5042002`
    - expected escrow contract
    - seller wallet
    - buyer wallet
@@ -142,7 +142,8 @@ Database state follows confirmed chain state, not the reverse.
 For every on-chain-enabled P2P trade:
 
 ```text
-configured_chain == receipt.chain
+configured_chain == 5042002
+receipt.chain == 5042002
 configured_escrow == receipt.to/contract
 backend_seller == trade.seller
 backend_buyer == trade.buyer
@@ -175,7 +176,7 @@ Agents must not:
 
 ## Production gate
 
-Testnet success is not a mainnet approval. Mainnet requires, at minimum:
+Arc Testnet success is not a mainnet approval. Mainnet requires, at minimum:
 
 - independent smart-contract audit
 - multisig/smart-account arbitration
