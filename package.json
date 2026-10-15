@@ -1,0 +1,14 @@
+{
+  "name": "arcx-protocol-v2",
+  "version": "0.2.1",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/compile.js",
+    "test": "node test/core.test.js"
+  },
+  "dependencies": {
+    "ethers": "^6.15.0",
+    "ganache": "^7.9.2",
+    "solc": "0.8.24"
+  }
+}
