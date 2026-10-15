@@ -5,10 +5,16 @@ on:
     branches: [main]
     paths:
       - 'web-overlay/**'
+      - 'contracts/MasterlawEXP2PEscrowV14.sol'
+      - 'scripts/compile.js'
+      - 'build/artifacts.json'
       - '.github/workflows/masterlawex-frontend-ci.yml'
   pull_request:
     paths:
       - 'web-overlay/**'
+      - 'contracts/MasterlawEXP2PEscrowV14.sol'
+      - 'scripts/compile.js'
+      - 'build/artifacts.json'
       - '.github/workflows/masterlawex-frontend-ci.yml'
 
 permissions:
@@ -17,7 +23,7 @@ permissions:
 jobs:
   build-and-guard:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     defaults:
       run:
         working-directory: web-overlay
@@ -26,6 +32,15 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
+      - name: Build fresh protocol ABI inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ..
+          npm ci --no-audit --no-fund
+          npm run build
+          test -s build/artifacts.json
+          node -e "const a=require('./build/artifacts.json'); if(!a.MasterlawEXP2PEscrowV14?.methodIdentifiers) process.exit(1)"
       - name: Verify local base snapshot
         shell: bash
         run: |
@@ -38,6 +53,8 @@ jobs:
           for file in "${files[@]}"; do
             test -s "base/${file}" || { echo "Missing base/${file}"; exit 1; }
           done
+          test -s mediation.html
+          test -s mediation.js
           ! grep -q 'https://arcx-exchange.vercel.app' build.js
           ! grep -q 'fetch(' build.js
       - name: Validate ARC network configuration
@@ -60,13 +77,17 @@ jobs:
           grep -q "trade:'0x1e6c598e'" p2p.js
           grep -q "byRef:'0x0bb784d8'" p2p.js
           grep -q 'ARC TESTNET ONLY' base/protocol.html
-          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js
+          grep -q "MASTERLAW_API='https://masterlaw-api.vercel.app'" mediation.js
+          grep -q 'REAL MONEY · OFF' mediation.html
+          grep -q 'broadcastByBrowser:false' mediation.js
+          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js mediation.html mediation.js
       - name: JavaScript syntax checks
         run: |
           node --check build.js
           node --check p2p.js
           node --check agents.js
           node --check demo.js
+          node --check mediation.js
           node --check base/core.js
           node --check base/protocol.js
       - name: Build frontend
@@ -81,6 +102,9 @@ jobs:
           test -s dist/agents.html
           test -s dist/protocol.html
           test -s dist/protocol.js
+          test -s dist/mediation.html
+          test -s dist/mediation.js
+          test -s dist/mediation-abi.js
           test -s dist/app.css
           test -s dist/core.js
           grep -q 'MasterlawEX' dist/index.html
@@ -94,6 +118,11 @@ jobs:
           grep -q 'reverseLookupMatches:true' dist/p2p.js
           grep -q 'P2P ESCROW V1.3 · ARC TESTNET ONLY' dist/protocol.html
           grep -q 'Desplegar Escrow V1.3 en ARC' dist/protocol.html
+          grep -q 'P2P V1.4 · PRE-REAL-MONEY' dist/mediation.html
+          grep -q 'openDisputeByArbiter(uint256,bytes32)' dist/mediation-abi.js
+          grep -q 'resolveDispute(uint256,bool,bytes32)' dist/mediation-abi.js
+          grep -q 'broadcastByBrowser:false' dist/mediation.js
+          ! grep -q 'eth_sendTransaction' dist/mediation.js
           grep -q 'AI Control' dist/agents.html
           grep -q "chain:'0x4cef52'" dist/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" dist/core.js
@@ -102,4 +131,4 @@ jobs:
           grep -q 'ensureChain,wait,send' dist/core.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 22 || { echo "Expected 22 dist files, found $count"; exit 1; }
+          test "$count" -eq 25 || { echo "Expected 25 dist files, found $count"; exit 1; }
