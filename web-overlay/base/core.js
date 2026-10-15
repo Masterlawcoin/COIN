@@ -6,7 +6,7 @@ function fmt(v,d,n=4){v=BigInt(v||0);let z=10n**BigInt(d),a=v/z,r=(v%z).toString
 async function rpc(method,params=[]){let r=await fetch(C.rpc,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:Date.now()+Math.random(),method,params})});let j=await r.json();if(j.error)throw Error(j.error.message);return j.result}
 async function call(to,data){return rpc('eth_call',[{to,data},'latest'])}
 function toast(msg,link){let t=$('toast');if(!t)return;t.innerHTML=link?`${escapeHtml(msg)} <a target="_blank" rel="noreferrer" href="${link}">Ver ↗</a>`:escapeHtml(msg);t.classList.add('show');clearTimeout(t._x);t._x=setTimeout(()=>t.classList.remove('show'),4200)}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[m]))}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 async function wc(method,params=[]){if(!window.ethereum)throw Error('Instala una wallet compatible con EVM');return window.ethereum.request({method,params})}
 async function ensureChain(){let c=await wc('eth_chainId');if(c===C.chain)return;try{await wc('wallet_switchEthereumChain',[{chainId:C.chain}])}catch(e){if(e.code!==4902&&e.code!==-32603)throw e;await wc('wallet_addEthereumChain',[{chainId:C.chain,chainName:'Arc Testnet',nativeCurrency:{name:'USDC',symbol:'USDC',decimals:18},rpcUrls:[C.rpc],blockExplorerUrls:[C.explorer]}])}}
 async function connect(){try{await ensureChain();account=(await wc('eth_requestAccounts'))[0];syncWalletUI();window.dispatchEvent(new CustomEvent('arcx:wallet',{detail:{account}}));return account}catch(e){toast(e.message);throw e}}
