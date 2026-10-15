@@ -1,10 +1,11 @@
 (()=>{'use strict';
 const A=window.ARCX_API,$=A.$,ABI=window.MLX_P2P_V14_ABI;
 const MASTERLAW_API='https://masterlaw-api.vercel.app';
+const P2P_SESSION_KEY='masterlawex:p2p:session:v1';
 const ORDER_DOMAIN='0xa8e22b39121058b75ab1c64c27412cd473a621f194cb1636443b2662dc0f8f66';
 const ZERO32='0x'+'0'.repeat(64);
 const STATES=['None','Funded','PaymentMarked','Released','Cancelled','Disputed','Refunded','Settled'];
-let masterlawToken='',verifiedEscrow=null,lastSafePayload=null;
+let masterlawToken='',walletEntitlement='',entitlementExpiresAt=0,verifiedEscrow=null,lastSafePayload=null;
 
 function strip(x){return String(x||'').replace(/^0x/,'')}
 function word(v){return BigInt(v).toString(16).padStart(64,'0')}
@@ -23,6 +24,12 @@ function setStatus(id,text,kind){const el=$(id);el.textContent=text;el.className
 function safeJson(v){return JSON.stringify(v,(_,x)=>typeof x==='bigint'?x.toString():x,2)}
 function tradeId(){const raw=$('tradeId').value.trim();if(!/^\d+$/.test(raw)||BigInt(raw)<=0n)throw Error('Trade ID debe ser entero mayor que 0');return BigInt(raw)}
 function currentEscrow(){const e=$('escrowAddress').value.trim();if(!validAddress(e))throw Error('Dirección escrow V1.4 inválida');return e}
+function activeEntitlement(){return !!walletEntitlement&&entitlementExpiresAt>Date.now()}
+function clearEntitlement(reason='WALLET_NOT_ATTESTED'){
+  walletEntitlement='';entitlementExpiresAt=0;
+  setStatus('walletState','WALLET · UNBOUND','bad');
+  return reason;
+}
 
 async function refreshMasterlawHealth(){
   try{
@@ -35,16 +42,17 @@ async function refreshMasterlawHealth(){
     if(Number(hj.chain_id)!==5042002||Number(pj.chain?.chain_id)!==5042002)throw Error('Masterlaw control plane fuera de ARC');
     setStatus('apiHealth','API · ONLINE','good');
     setStatus('moneyState','REAL MONEY · OFF','bad');
-    $('kycOutput').textContent=safeJson({health:hj,policy:pj,note:'KYC individual requiere token Masterlaw y vínculo wallet ARC.'});
+    $('kycOutput').textContent=safeJson({health:hj,policy:pj,note:'KYC y wallet deben validarse por separado. La credencial de vínculo nunca habilita dinero real por sí sola.'});
   }catch(e){
     setStatus('apiHealth','API · NOT DEPLOYED','warn');
     setStatus('moneyState','REAL MONEY · OFF','bad');
+    clearEntitlement();
     $('kycOutput').textContent='FAIL CLOSED · '+String(e.message||e)+'\nEl código Masterlaw está en main, pero esta API todavía no está visible en producción.';
   }
 }
 
 async function checkKyc(){
-  const token=$('masterlawToken').value.trim();masterlawToken=token;
+  const token=$('masterlawToken').value.trim();masterlawToken=token;clearEntitlement();
   if(!token){setStatus('kycState','KYC · BLOCKED','bad');$('kycOutput').textContent='MASTERLAW_TOKEN_REQUIRED';return}
   $('kycOutput').textContent='Consultando identidad Masterlaw…';
   try{
@@ -53,8 +61,36 @@ async function checkKyc(){
     if(!r.ok||!j.eligible){setStatus('kycState','KYC · BLOCKED','bad');$('kycOutput').textContent=safeJson(j);return}
     setStatus('kycState','KYC · VERIFIED','good');
     setStatus('moneyState','REAL MONEY · OFF','bad');
-    $('kycOutput').textContent=safeJson({...j,note:'KYC aprobado. Aún falta BIND_ARC_WALLET y real_money_enabled continúa false.'});
+    $('kycOutput').textContent=safeJson({...j,note:'KYC aprobado. Ahora vincula la wallet ARC usando la sesión P2P firmada.'});
   }catch(e){setStatus('kycState','KYC · BLOCKED','bad');$('kycOutput').textContent='FAIL CLOSED · '+String(e.message||e)}
+}
+
+async function bindWallet(){
+  const token=$('masterlawToken').value.trim()||masterlawToken;masterlawToken=token;
+  if(!token){setStatus('kycState','KYC · BLOCKED','bad');clearEntitlement();$('kycOutput').textContent='MASTERLAW_TOKEN_REQUIRED';return}
+  const p2pSession=sessionStorage.getItem(P2P_SESSION_KEY)||'';
+  if(!p2pSession){clearEntitlement();$('kycOutput').textContent='P2P_SIGNED_SESSION_REQUIRED · Abre P2P, inicia sesión mediante firma de wallet y vuelve en esta misma pestaña.';return}
+  try{
+    const wallet=A.account||await A.connect();
+    await A.ensureChain();
+    if(!validAddress(wallet))throw Error('ARC_WALLET_NOT_CONNECTED');
+    $('kycOutput').textContent='Validando identidad Masterlaw + sesión P2P firmada + wallet ARC…';
+    const r=await fetch(MASTERLAW_API+'/api/exchange/p2p/bind-wallet',{
+      method:'POST',
+      headers:{accept:'application/json','content-type':'application/json',authorization:'Bearer '+token},
+      body:JSON.stringify({p2p_session_token:p2pSession,expected_wallet:wallet})
+    });
+    const j=await r.json().catch(()=>({ok:false,eligible:false,reason:'INVALID_RESPONSE'}));
+    if(!r.ok||!j.eligible||!j.entitlement){clearEntitlement();$('kycOutput').textContent=safeJson(j);return}
+    if(Number(j.chain_id)!==5042002||!same(j.wallet,wallet)||j.real_money_enabled!==false)throw Error('ENTITLEMENT_SCOPE_MISMATCH');
+    walletEntitlement=String(j.entitlement);
+    entitlementExpiresAt=Date.now()+Number(j.expires_in||0)*1000;
+    setStatus('kycState','KYC · VERIFIED','good');
+    setStatus('walletState','WALLET · ATTESTED','good');
+    setStatus('moneyState','REAL MONEY · OFF','bad');
+    const visible={...j,entitlement:'[MEMORY_ONLY]',expires_at:new Date(entitlementExpiresAt).toISOString(),note:'Vínculo temporal usuarios.id ↔ wallet ARC. No se guarda en localStorage/sessionStorage ni habilita dinero real.'};
+    $('kycOutput').textContent=safeJson(visible);
+  }catch(e){clearEntitlement();$('kycOutput').textContent='FAIL CLOSED · '+String(e.message||e)}
 }
 
 async function verifyEscrow(){
@@ -109,10 +145,11 @@ function showSafe(action,r,id,data,meta){
   $('safeOutput').textContent=safeJson(lastSafePayload);$('copySafe').disabled=false;
 }
 async function copySafe(){if(!lastSafePayload)return;try{await navigator.clipboard.writeText(safeJson(lastSafePayload));A.toast('Payload copiado')}catch{A.toast('No se pudo copiar automáticamente')}}
-function clearKyc(){masterlawToken='';$('masterlawToken').value='';setStatus('kycState','KYC · BLOCKED','bad');$('kycOutput').textContent='Token eliminado. Acceso P2P real bloqueado.'}
+function clearKyc(){masterlawToken='';$('masterlawToken').value='';clearEntitlement();setStatus('kycState','KYC · BLOCKED','bad');$('kycOutput').textContent='Credencial Masterlaw eliminada de memoria. La sesión P2P firmada no se modifica.'}
 
 document.addEventListener('DOMContentLoaded',()=>{
-  $('checkKyc').onclick=checkKyc;$('clearKyc').onclick=clearKyc;$('inspectEscrow').onclick=inspect;$('prepareFreeze').onclick=prepareFreeze;$('prepareResolve').onclick=prepareResolve;$('copySafe').onclick=copySafe;
+  $('checkKyc').onclick=checkKyc;$('bindWallet').onclick=bindWallet;$('clearKyc').onclick=clearKyc;$('inspectEscrow').onclick=inspect;$('prepareFreeze').onclick=prepareFreeze;$('prepareResolve').onclick=prepareResolve;$('copySafe').onclick=copySafe;
+  window.addEventListener('arcx:wallet',()=>{if(activeEntitlement()){clearEntitlement('WALLET_CHANGED');$('kycOutput').textContent='WALLET_CHANGED · vuelve a vincular la wallet con Masterlaw.'}});
   refreshMasterlawHealth();
 });
 })();
