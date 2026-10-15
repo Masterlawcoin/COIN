@@ -1,0 +1,64 @@
+name: MasterlawEX Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web-overlay/**'
+      - '.github/workflows/masterlawex-frontend-ci.yml'
+  pull_request:
+    paths:
+      - 'web-overlay/**'
+      - '.github/workflows/masterlawex-frontend-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: web-overlay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify local base snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            app.css core.js earn.html earn.js identity.html index.html
+            list.html list.js portfolio.html portfolio.js protocol.html protocol.js
+            registry.js startup.html startup.js trade.js
+          )
+          for file in "${files[@]}"; do
+            test -s "base/${file}" || { echo "Missing base/${file}"; exit 1; }
+          done
+          ! grep -q 'https://arcx-exchange.vercel.app' build.js
+          ! grep -q 'fetch(' build.js
+      - name: JavaScript syntax checks
+        run: |
+          node --check build.js
+          node --check p2p.js
+          node --check agents.js
+          node --check demo.js
+      - name: Build frontend
+        run: npm run build
+      - name: Validate output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          test -s dist/p2p.html
+          test -s dist/agents.html
+          test -s dist/app.css
+          test -s dist/core.js
+          grep -q 'MasterlawEX' dist/index.html
+          grep -q 'P2P TESTNET SANDBOX' dist/p2p.html
+          grep -q 'AI Control' dist/agents.html
+          count=$(find dist -maxdepth 1 -type f | wc -l)
+          test "$count" -eq 22 || { echo "Expected 22 dist files, found $count"; exit 1; }
