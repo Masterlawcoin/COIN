@@ -83,9 +83,15 @@ function equal(actual, expected, label) {
   const amount = ethers.parseUnits('100', 6);
   await (await usdc.approve(escrowAddr, ethers.MaxUint256)).wait();
 
-  const create = async (timeout = 900, value = amount, who = buyerAddr) => {
+  let refNonce = 1;
+  const makeRef = label => ethers.keccak256(ethers.toUtf8Bytes(`masterlawex:p2p:${label}`));
+  const freshRef = label => makeRef(`${label}:${refNonce++}`);
+  const create = async (timeout = 900, value = amount, who = buyerAddr, reference = freshRef('trade')) => {
     const id = await escrow.nextTradeId();
-    await (await escrow.createTrade(who, value, timeout)).wait();
+    await (await escrow.createTrade(who, value, timeout, reference)).wait();
+    const stored = await escrow.trades(id);
+    equal(stored.reference, reference, 'trade reference stored');
+    equal(await escrow.tradeIdByReference(reference), id, 'reference reverse lookup');
     return id;
   };
 
@@ -93,18 +99,28 @@ function equal(actual, expected, label) {
   await mustRevert(() => deploy(C.E, [ethers.ZeroAddress, arbiterAddr]), 'zero asset');
   await mustRevert(() => deploy(C.E, [sellerAddr, arbiterAddr]), 'EOA asset');
   await mustRevert(() => deploy(C.E, [usdcAddr, ethers.ZeroAddress]), 'zero arbiter');
-  await mustRevert(() => escrow.createTrade(ethers.ZeroAddress, amount, 900), 'zero buyer');
-  await mustRevert(() => escrow.createTrade(sellerAddr, amount, 900), 'seller equals buyer');
-  await mustRevert(() => escrow.createTrade(buyerAddr, 0, 900), 'zero amount');
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599), 'timeout too short');
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401), 'timeout too long');
+  await mustRevert(() => escrow.createTrade(ethers.ZeroAddress, amount, 900, freshRef('zero-buyer')), 'zero buyer');
+  await mustRevert(() => escrow.createTrade(sellerAddr, amount, 900, freshRef('self-buyer')), 'seller equals buyer');
+  await mustRevert(() => escrow.createTrade(buyerAddr, 0, 900, freshRef('zero-amount')), 'zero amount');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599, freshRef('short-timeout')), 'timeout too short');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401, freshRef('long-timeout')), 'timeout too long');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900, ethers.ZeroHash), 'zero reference');
+
+  // One off-chain order reference can bind to exactly one escrow for the lifetime of the contract.
+  const duplicateRef = freshRef('duplicate-reference');
+  const duplicateTrade = await create(904, amount + 4n, buyerAddr, duplicateRef);
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 5n, 905, duplicateRef), 'duplicate reference');
+  equal(await escrow.tradeIdByReference(duplicateRef), duplicateTrade, 'duplicate reference remains bound to original trade');
+  await (await escrow.connect(buyer).cancelByBuyer(duplicateTrade)).wait();
 
   // Exact funding: a fee-on-transfer asset cannot make escrow accounting insolvent.
   const nextBeforeFee = await escrow.nextTradeId();
   const escrowBeforeFee = await usdc.balanceOf(escrowAddr);
+  const feeFundingRef = freshRef('fee-funding');
   await (await usdc.setFeeBps(100)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 2n, 901), 'fee-on-transfer funding');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 2n, 901, feeFundingRef), 'fee-on-transfer funding');
   equal(await escrow.nextTradeId(), nextBeforeFee, 'failed fee funding rolls back trade id');
+  equal(await escrow.tradeIdByReference(feeFundingRef), 0n, 'failed fee funding rolls back reference binding');
   equal(await usdc.balanceOf(escrowAddr), escrowBeforeFee, 'failed fee funding rolls back balance');
   await (await usdc.setFeeBps(0)).wait();
 
@@ -174,9 +190,11 @@ function equal(actual, expected, label) {
   equal(await usdc.balanceOf(sellerAddr), sellerBefore5, 'arbiter seller refund');
   equal((await escrow.trades(trade5)).state, 6n, 'refunded state');
 
-  // ERC-20 failures must revert atomically; use a distinct amount for the expected transferFrom failure.
+  // ERC-20 failures must revert atomically; failed funding cannot consume the external reference.
+  const transferFailRef = freshRef('transferfrom-failure');
   await (await usdc.setFailures(false, true)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 1n, 900), 'transferFrom false');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 1n, 900, transferFailRef), 'transferFrom false');
+  equal(await escrow.tradeIdByReference(transferFailRef), 0n, 'transferFrom failure rolls back reference binding');
   await (await usdc.setFailures(false, false)).wait();
   const trade6 = await create();
   await (await escrow.connect(buyer).markPaymentSent(trade6)).wait();
@@ -206,7 +224,7 @@ function equal(actual, expected, label) {
   const trade7 = await create();
   await mustRevert(() => escrow.connect(outsider).setNewTradesPaused(true), 'non-arbiter pause');
   await (await escrow.connect(arbiter).setNewTradesPaused(true)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900), 'paused create');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900, freshRef('paused-create')), 'paused create');
   await (await escrow.connect(buyer).cancelByBuyer(trade7)).wait();
   await (await escrow.connect(arbiter).setNewTradesPaused(false)).wait();
 
@@ -224,7 +242,7 @@ function equal(actual, expected, label) {
   await (await escrow.connect(nextArbiter).setNewTradesPaused(true)).wait();
   await (await escrow.connect(nextArbiter).setNewTradesPaused(false)).wait();
 
-  console.log('MASTERLAWEX P2P ESCROW V1.1 ADVERSARIAL TEST PASS');
+  console.log('MASTERLAWEX P2P ESCROW V1.2 ADVERSARIAL TEST PASS');
 })().catch(e => {
   console.error(e);
   process.exit(1);
