@@ -1,6 +1,8 @@
 (()=>{'use strict';
 const A=window.ARCX_API,$=A.$,USDC='0x3600000000000000000000000000000000000000';
-const BUILD='858c5e093abf6dcb4758b4b42868c308baabdca0';
+const BUILD='3f7189532c2c5a72abbba84e30290565e1f62174';
+const BUILD_ID='0x2101ac90dc7c4ad4499c7cda96ffe1b802e3b7aa7f86fe3559a21220550c9b09';
+const ARCX_SOURCE_SHA256='0xbc474c2389c2e4e34f6ad43cc9733be8f59be4b2da817353b575eb77a77637d6';
 const ART=`https://raw.githubusercontent.com/Masterlawcoin/COIN/${BUILD}/build/artifacts.json`;
 let state=JSON.parse(localStorage.getItem('arcx:v2:deploy')||'{}'),artifacts=null,busy=false;
 const addrWord=a=>String(a||'').replace(/^0x/,'').toLowerCase().padStart(64,'0');
@@ -18,15 +20,24 @@ function render(){
   $('deployMarketFactory').textContent=state.marketFactory?'MarketFactory desplegado':'Desplegar MarketFactory';
   $('deployRouter').textContent=state.router?'Router desplegado':'Desplegar Router';
   $('deployProgress').textContent=`${[state.tokenFactory,state.marketFactory,state.router].filter(Boolean).length}/3 contratos V2 registrados en este navegador`;
-  $('exportCore').textContent=JSON.stringify({chainId:A.C.chain,usdc:USDC,build:BUILD,...state},null,2);
+  $('exportCore').textContent=JSON.stringify({chainId:A.C.chain,usdc:USDC,build:BUILD,buildId:BUILD_ID,sourceSha256:ARCX_SOURCE_SHA256,...state},null,2);
 }
 async function loadArtifacts(){
   if(artifacts)return artifacts;
-  $('artifactState').textContent='Cargando artefacto CI…';
+  $('artifactState').textContent='Cargando artefacto CI atestado…';
   const r=await fetch(ART,{cache:'no-store'});if(!r.ok)throw Error('No se pudo cargar el artefacto compilado');
-  artifacts=await r.json();
-  for(const k of ['ARCXTokenFactory','ARCXMarketFactory','ARCXRouter']) if(!artifacts[k]?.bytecode?.startsWith('0x'))throw Error('Artefacto CI incompleto');
-  $('artifactState').innerHTML=`CI PASS · build <code>${BUILD.slice(0,10)}…</code> · artefactos listos`;
+  const candidate=await r.json();
+  const meta=candidate?._meta;
+  if(meta?.schema!==2)throw Error('Artefacto sin metadata reproducible');
+  if(meta.buildId!==BUILD_ID)throw Error('Build ID no coincide con el artefacto fijado');
+  if(meta.sourceHashes?.['contracts/ARCXV2.sol']!==ARCX_SOURCE_SHA256)throw Error('Hash de ARCXV2.sol no coincide');
+  if(!String(meta.compiler||'').startsWith('0.8.24+'))throw Error('Compilador Solidity inesperado');
+  if(meta.optimizer?.enabled!==true||meta.optimizer?.runs!==200)throw Error('Configuración optimizer inesperada');
+  for(const k of ['ARCXTokenFactory','ARCXMarketFactory','ARCXRouter']){
+    if(candidate[k]?.source!=='contracts/ARCXV2.sol'||!candidate[k]?.bytecode?.startsWith('0x')||!candidate[k]?.bytecodeSha256?.startsWith('0x'))throw Error('Artefacto CI incompleto');
+  }
+  artifacts=candidate;
+  $('artifactState').innerHTML=`CI PASS · reproducible · build <code>${BUILD.slice(0,10)}…</code> · id <code>${BUILD_ID.slice(0,14)}…</code>`;
   return artifacts;
 }
 async function deploy(kind,artifactName,args=''){
@@ -39,7 +50,7 @@ async function deploy(kind,artifactName,args=''){
     $('lastDeploy').innerHTML=`Esperando ${kind}: <a target="_blank" rel="noreferrer" href="${A.C.explorer}/tx/${hash}">${hash.slice(0,14)}…</a>`;
     const receipt=await A.wait(hash);
     if(!valid(receipt.contractAddress))throw Error('Receipt confirmado sin contractAddress');
-    state[kind]=receipt.contractAddress; state[kind+'Tx']=hash; state.build=BUILD; save();
+    state[kind]=receipt.contractAddress; state[kind+'Tx']=hash; state.build=BUILD; state.buildId=BUILD_ID; save();
     $('lastDeploy').innerHTML=`${kind} confirmado: ${link(receipt.contractAddress)}`;
     A.toast(`${kind} desplegado`,`${A.C.explorer}/address/${receipt.contractAddress}`);
   }catch(e){A.toast(e.message);$('lastDeploy').textContent='Deploy detenido: '+e.message}
@@ -51,7 +62,7 @@ async function deployAll(){
   if(!state.router&&state.marketFactory)await deploy('router','ARCXRouter',addrWord(state.marketFactory));
 }
 document.addEventListener('DOMContentLoaded',()=>{
-  render();loadArtifacts().catch(e=>{$('artifactState').textContent='Artefacto no disponible: '+e.message});
+  render();loadArtifacts().catch(e=>{$('artifactState').textContent='Artefacto rechazado: '+e.message});
   $('deployTokenFactory').onclick=()=>deploy('tokenFactory','ARCXTokenFactory');
   $('deployMarketFactory').onclick=()=>deploy('marketFactory','ARCXMarketFactory',addrWord(USDC));
   $('deployRouter').onclick=()=>state.marketFactory?deploy('router','ARCXRouter',addrWord(state.marketFactory)):A.toast('Primero despliega MarketFactory');
