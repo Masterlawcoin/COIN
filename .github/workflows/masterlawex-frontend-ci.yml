@@ -46,13 +46,17 @@ jobs:
           set -euo pipefail
           grep -q "chain:'0x4cef52'" base/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" base/core.js
-          grep -q "explorer:'https://explorer.testnet.arc.io'" base/core.js
+          grep -q "rpcs:\['https://rpc.testnet.arc.io','https://rpc.testnet.arc.network'\]" base/core.js
+          grep -q "explorer:'https://testnet.arcscan.app'" base/core.js
           grep -q "usdc:'0x3600000000000000000000000000000000000000'" base/core.js
+          grep -q 'READ_RPC_METHODS' base/core.js
+          grep -q 'rpcUrls:C.rpcs' base/core.js
           grep -q 'ensureChain,wait,send' base/core.js
           grep -q "P2P_BUILD='83cdc85310add7e791b955bb63dfbfea0976eb6e'" base/protocol.js
           grep -q "P2P_BUILD_ID='0x762d93a9ce52445a9beced69f6aba33aa60734f6c7ca0242b594ad505ad7ed86'" base/protocol.js
           grep -q "P2P_ORDER_REF_DOMAIN='0xa8e22b39121058b75ab1c64c27412cd473a621f194cb1636443b2662dc0f8f66'" base/protocol.js
           grep -q 'ARC TESTNET ONLY' base/protocol.html
+          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js
       - name: JavaScript syntax checks
         run: |
           node --check build.js
@@ -82,7 +86,9 @@ jobs:
           grep -q 'AI Control' dist/agents.html
           grep -q "chain:'0x4cef52'" dist/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" dist/core.js
-          grep -q "explorer:'https://explorer.testnet.arc.io'" dist/core.js
+          grep -q "explorer:'https://testnet.arcscan.app'" dist/core.js
+          grep -q 'READ_RPC_METHODS' dist/core.js
           grep -q 'ensureChain,wait,send' dist/core.js
+          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
           test "$count" -eq 22 || { echo "Expected 22 dist files, found $count"; exit 1; }
