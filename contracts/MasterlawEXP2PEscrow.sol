@@ -2,13 +2,15 @@
 pragma solidity ^0.8.24;
 
 interface IMLXERC20 {
+    function balanceOf(address account) external view returns (uint256);
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-/// @title MasterlawEX P2P Escrow V1
-/// @notice Non-custodial USDC escrow candidate for Arc Testnet P2P trades.
+/// @title MasterlawEX P2P Escrow V1.1
+/// @notice Non-custodial USDC escrow candidate for EVM testnet P2P trades.
 /// @dev No fiat settlement is performed on-chain. The contract only controls the crypto leg.
+///      Exact balance-delta checks intentionally reject fee-on-transfer/rebasing assets.
 contract MasterlawEXP2PEscrow {
     enum State { None, Funded, PaymentMarked, Released, Cancelled, Disputed, Refunded }
 
@@ -49,6 +51,7 @@ contract MasterlawEXP2PEscrow {
     error DeadlineNotPassed();
     error Paused();
     error TransferFailed();
+    error BalanceMismatch();
     error Reentrancy();
 
     modifier nonReentrant() {
@@ -69,7 +72,8 @@ contract MasterlawEXP2PEscrow {
         arbiter = arbiter_;
     }
 
-    /// @notice Seller locks USDC for a specific buyer. Timeout must be between 10 minutes and 24 hours.
+    /// @notice Seller locks the exact asset amount for a specific buyer.
+    /// @dev Timeout must be between 10 minutes and 24 hours. Fee-on-transfer assets are rejected.
     function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds) external nonReentrant returns (uint256 tradeId) {
         if (newTradesPaused) revert Paused();
         if (buyer == address(0) || buyer == msg.sender) revert InvalidAddress();
@@ -88,7 +92,7 @@ contract MasterlawEXP2PEscrow {
             state: State.Funded
         });
 
-        _safeTransferFrom(msg.sender, address(this), amount);
+        _safeTransferFromExact(msg.sender, amount);
         emit TradeCreated(tradeId, msg.sender, buyer, amount, deadline);
     }
 
@@ -102,13 +106,13 @@ contract MasterlawEXP2PEscrow {
         emit PaymentMarked(tradeId, msg.sender);
     }
 
-    /// @notice Seller releases escrowed USDC after confirming payment off-chain.
+    /// @notice Seller releases the exact escrowed amount after confirming payment off-chain.
     function release(uint256 tradeId) external nonReentrant {
         Trade storage t = trades[tradeId];
         if (msg.sender != t.seller) revert Unauthorized();
         if (t.state != State.PaymentMarked) revert InvalidState();
         t.state = State.Released;
-        _safeTransfer(t.buyer, t.amount);
+        _safeTransferExact(t.buyer, t.amount);
         emit Released(tradeId, t.buyer, t.amount);
     }
 
@@ -118,7 +122,7 @@ contract MasterlawEXP2PEscrow {
         if (msg.sender != t.buyer) revert Unauthorized();
         if (t.state != State.Funded) revert InvalidState();
         t.state = State.Cancelled;
-        _safeTransfer(t.seller, t.amount);
+        _safeTransferExact(t.seller, t.amount);
         emit Cancelled(tradeId, msg.sender, t.amount);
     }
 
@@ -129,7 +133,7 @@ contract MasterlawEXP2PEscrow {
         if (t.state != State.Funded) revert InvalidState();
         if (block.timestamp <= t.deadline) revert DeadlineNotPassed();
         t.state = State.Cancelled;
-        _safeTransfer(t.seller, t.amount);
+        _safeTransferExact(t.seller, t.amount);
         emit Cancelled(tradeId, msg.sender, t.amount);
     }
 
@@ -148,7 +152,7 @@ contract MasterlawEXP2PEscrow {
         if (t.state != State.Disputed) revert InvalidState();
         t.state = releaseToBuyer ? State.Released : State.Refunded;
         address recipient = releaseToBuyer ? t.buyer : t.seller;
-        _safeTransfer(recipient, t.amount);
+        _safeTransferExact(recipient, t.amount);
         emit DisputeResolved(tradeId, releaseToBuyer, t.amount);
     }
 
@@ -173,13 +177,32 @@ contract MasterlawEXP2PEscrow {
         emit ArbiterAccepted(old, msg.sender);
     }
 
-    function _safeTransfer(address to, uint256 amount) private {
+    function _safeTransferExact(address to, uint256 amount) private {
+        uint256 escrowBefore = asset.balanceOf(address(this));
+        uint256 recipientBefore = asset.balanceOf(to);
+
         (bool ok, bytes memory ret) = address(asset).call(abi.encodeWithSelector(IMLXERC20.transfer.selector, to, amount));
         if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();
+
+        uint256 escrowAfter = asset.balanceOf(address(this));
+        uint256 recipientAfter = asset.balanceOf(to);
+        if (
+            escrowBefore < escrowAfter ||
+            recipientAfter < recipientBefore ||
+            escrowBefore - escrowAfter != amount ||
+            recipientAfter - recipientBefore != amount
+        ) revert BalanceMismatch();
     }
 
-    function _safeTransferFrom(address from, address to, uint256 amount) private {
-        (bool ok, bytes memory ret) = address(asset).call(abi.encodeWithSelector(IMLXERC20.transferFrom.selector, from, to, amount));
+    function _safeTransferFromExact(address from, uint256 amount) private {
+        uint256 escrowBefore = asset.balanceOf(address(this));
+
+        (bool ok, bytes memory ret) = address(asset).call(
+            abi.encodeWithSelector(IMLXERC20.transferFrom.selector, from, address(this), amount)
+        );
         if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();
+
+        uint256 escrowAfter = asset.balanceOf(address(this));
+        if (escrowAfter < escrowBefore || escrowAfter - escrowBefore != amount) revert BalanceMismatch();
     }
 }
