@@ -47,12 +47,20 @@ jobs:
           grep -q "chain:'0x4cef52'" base/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" base/core.js
           grep -q "explorer:'https://explorer.testnet.arc.io'" base/core.js
+          grep -q "usdc:'0x3600000000000000000000000000000000000000'" base/core.js
+          grep -q 'ensureChain,wait,send' base/core.js
+          grep -q "P2P_BUILD='83cdc85310add7e791b955bb63dfbfea0976eb6e'" base/protocol.js
+          grep -q "P2P_BUILD_ID='0x762d93a9ce52445a9beced69f6aba33aa60734f6c7ca0242b594ad505ad7ed86'" base/protocol.js
+          grep -q "P2P_ORDER_REF_DOMAIN='0xa8e22b39121058b75ab1c64c27412cd473a621f194cb1636443b2662dc0f8f66'" base/protocol.js
+          grep -q 'ARC TESTNET ONLY' base/protocol.html
       - name: JavaScript syntax checks
         run: |
           node --check build.js
           node --check p2p.js
           node --check agents.js
           node --check demo.js
+          node --check base/core.js
+          node --check base/protocol.js
       - name: Build frontend
         run: npm run build
       - name: Validate output
@@ -62,14 +70,19 @@ jobs:
           test -s dist/index.html
           test -s dist/p2p.html
           test -s dist/agents.html
+          test -s dist/protocol.html
+          test -s dist/protocol.js
           test -s dist/app.css
           test -s dist/core.js
           grep -q 'MasterlawEX' dist/index.html
           grep -q 'P2P · ARC TESTNET SANDBOX' dist/p2p.html
           grep -q 'ARC TESTNET · PRE-ESCROW' dist/p2p.html
+          grep -q 'P2P ESCROW V1.3 · ARC TESTNET ONLY' dist/protocol.html
+          grep -q 'Desplegar Escrow V1.3 en ARC' dist/protocol.html
           grep -q 'AI Control' dist/agents.html
           grep -q "chain:'0x4cef52'" dist/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" dist/core.js
           grep -q "explorer:'https://explorer.testnet.arc.io'" dist/core.js
+          grep -q 'ensureChain,wait,send' dist/core.js
           count=$(find dist -maxdepth 1 -type f | wc -l)
           test "$count" -eq 22 || { echo "Expected 22 dist files, found $count"; exit 1; }
