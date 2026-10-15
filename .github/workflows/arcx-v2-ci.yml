@@ -55,7 +55,7 @@ jobs:
       - name: Enforce ARC-only network lock
         shell: bash
         run: |
-          if grep -R -n -E '84532|basescan\.org' contracts scripts deploy docs web-overlay package.json; then
+          if grep -R -n -E '84532|Base Sepolia|basescan\.org|sepolia\.basescan' contracts scripts deploy docs web-overlay package.json; then
             echo "Non-ARC network reference detected"
             exit 1
           fi
@@ -66,12 +66,14 @@ jobs:
           const requiredCore = [
             "chain:'0x4cef52'",
             "rpc:'https://rpc.testnet.arc.io'",
-            "explorer:'https://explorer.testnet.arc.io'"
+            "rpcs:['https://rpc.testnet.arc.io','https://rpc.testnet.arc.network']",
+            "explorer:'https://testnet.arcscan.app'",
+            "usdc:'0x3600000000000000000000000000000000000000'"
           ];
           for (const value of requiredCore) {
             if (!core.includes(value)) throw new Error(`ARC frontend lock missing: ${value}`);
           }
-          for (const value of ['5042002n', 'https://rpc.testnet.arc.io', 'https://explorer.testnet.arc.io']) {
+          for (const value of ['5042002n', 'https://rpc.testnet.arc.io', 'https://testnet.arcscan.app']) {
             if (!deployer.includes(value)) throw new Error(`ARC deploy lock missing: ${value}`);
           }
           console.log('ARC-ONLY NETWORK LOCK PASS');
