@@ -19,4 +19,11 @@ function buildMediationAbi(){
   const payload={version:'1.4.0-testnet',buildId:artifacts._meta?.buildId||'',sourceHash:artifacts._meta?.sourceHashes?.['contracts/MasterlawEXP2PEscrowV14.sol']||'',methods:Object.fromEntries(required.map(sig=>[sig,methods[sig].toLowerCase()]))};
   fs.writeFileSync(path.join(OUT,'mediation-abi.js'),`window.MLX_P2P_V14_ABI=${JSON.stringify(payload)};\n`);
 }
-(()=>{fs.rmSync(OUT,{recursive:true,force:true});fs.mkdirSync(OUT,{recursive:true});const brandCss=fs.readFileSync(path.join(HERE,'brand.css'),'utf8');for(const name of files){let s=get(name);if(name==='app.css'){if(!s.includes('.demo-network{'))s+='\n'+demoCss+'\n';if(!s.includes('.mlx-logo{'))s+='\n'+brandCss+'\n'}else if(name.endsWith('.html'))s=patchHtml(s,name);fs.writeFileSync(path.join(OUT,name),s)}for(const name of extras){let s=fs.readFileSync(path.join(HERE,name),'utf8');if(name.endsWith('.html'))s=patchHtml(s,name);fs.writeFileSync(path.join(OUT,name),s)}buildMediationAbi();console.log('MasterlawEX repository-backed build complete',fs.readdirSync(OUT).length,'files')})()
+function buildReleaseManifest(){
+  const sha=process.env.VERCEL_GIT_COMMIT_SHA||process.env.GITHUB_SHA||null;
+  const ref=process.env.VERCEL_GIT_COMMIT_REF||process.env.GITHUB_REF_NAME||null;
+  const environment=process.env.VERCEL_ENV||(process.env.GITHUB_ACTIONS?'github-actions':'local');
+  const release={schema:'MASTERLAWEX_RELEASE_V1',app:'MasterlawEX',git_sha:sha,git_ref:ref,environment,network:'Arc Testnet',chain_id:5042002,asset:'0x3600000000000000000000000000000000000000',p2p_mode:'PRE_REAL_MONEY',real_money_enabled:false,generated_at:new Date().toISOString()};
+  fs.writeFileSync(path.join(OUT,'release.json'),JSON.stringify(release,null,2)+'\n');
+}
+(()=>{fs.rmSync(OUT,{recursive:true,force:true});fs.mkdirSync(OUT,{recursive:true});const brandCss=fs.readFileSync(path.join(HERE,'brand.css'),'utf8');for(const name of files){let s=get(name);if(name==='app.css'){if(!s.includes('.demo-network{'))s+='\n'+demoCss+'\n';if(!s.includes('.mlx-logo{'))s+='\n'+brandCss+'\n'}else if(name.endsWith('.html'))s=patchHtml(s,name);fs.writeFileSync(path.join(OUT,name),s)}for(const name of extras){let s=fs.readFileSync(path.join(HERE,name),'utf8');if(name.endsWith('.html'))s=patchHtml(s,name);fs.writeFileSync(path.join(OUT,name),s)}buildMediationAbi();buildReleaseManifest();console.log('MasterlawEX repository-backed build complete',fs.readdirSync(OUT).length,'files')})()
