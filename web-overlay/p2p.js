@@ -1,29 +1,40 @@
 (()=>{'use strict';
 const A=window.ARCX_API,$=A.$,ENDPOINT='https://tjyplcnvwjzpfcbctlrs.supabase.co/functions/v1/masterlawex-p2p';
-const SESSION_KEY='masterlawex:p2p:session:v1',DEPLOY_STATE_KEY='arcx:v2:deploy',P2P_VERSION='1.3.0-testnet',P2P_DOMAIN='0xa8e22b39121058b75ab1c64c27412cd473a621f194cb1636443b2662dc0f8f66';
+const SESSION_KEY='masterlawex:p2p:session:v1',DEPLOY_STATE_KEY='arcx:v2:deploy';
+const P2P_RECORD_SCHEMA=3,P2P_BUILD='83cdc85310add7e791b955bb63dfbfea0976eb6e',P2P_BUILD_ID='0x762d93a9ce52445a9beced69f6aba33aa60734f6c7ca0242b594ad505ad7ed86',P2P_SOURCE_SHA256='0x9956d1668036b7e265f8e05d89d1ad71463dc7799d70d6e268e8f080ab319773',P2P_VERSION='1.3.0-testnet',P2P_DOMAIN='0xa8e22b39121058b75ab1c64c27412cd473a621f194cb1636443b2662dc0f8f66';
 const ESCROW_SEL={asset:'0x38d52e0f',arbiter:'0xfe25e00a',version:'0xffa1ad74',domain:'0xb30dc2a9'};
 let session=sessionStorage.getItem(SESSION_KEY)||'',me=null,offers=[],selected=null,agents=[];
 const payNames={BANK_TRANSFER:'Transferencia bancaria',MERCADO_PAGO:'Mercado Pago',TRANSFER_24_7:'Transferencia 24/7',OTHER_VERIFIED:'Otro verificado'};
 function short(w){return w?w.slice(0,6)+'…'+w.slice(-4):'—'}
 function money(v,c){return Number(v||0).toLocaleString('es-CL',{maximumFractionDigits:2})+' '+c}
 function validAddress(a){return /^0x[a-fA-F0-9]{40}$/.test(a||'')}
+function sameAddress(a,b){return String(a||'').toLowerCase()===String(b||'').toLowerCase()}
 function decodeAddress(data){let h=String(data||'').replace(/^0x/,'');if(h.length<64)throw Error('address ABI inválido');return '0x'+h.slice(24,64)}
 function decodeString(data){let h=String(data||'').replace(/^0x/,'');if(h.length<128)throw Error('string ABI inválido');let offset=Number(BigInt('0x'+h.slice(0,64)))*2;if(!Number.isSafeInteger(offset)||offset+64>h.length)throw Error('offset ABI inválido');let len=Number(BigInt('0x'+h.slice(offset,offset+64))),start=offset+64,end=start+len*2;if(!Number.isSafeInteger(len)||end>h.length)throw Error('string ABI inválido');let bytes=new Uint8Array((h.slice(start,end).match(/.{1,2}/g)||[]).map(x=>parseInt(x,16)));return new TextDecoder().decode(bytes)}
+function deploymentRecordOk(d){return !!d&&d.p2pSchema===P2P_RECORD_SCHEMA&&d.p2pNetwork==='Arc Testnet'&&String(d.p2pChainId||'').toLowerCase()===A.C.chain&&sameAddress(d.p2pAsset,A.C.usdc)&&validAddress(d.p2pArbiter)&&validAddress(d.p2pEscrow)&&d.p2pBuild===P2P_BUILD&&d.p2pBuildId===P2P_BUILD_ID&&d.p2pSourceSha256===P2P_SOURCE_SHA256&&d.p2pExpectedVersion===P2P_VERSION&&String(d.p2pExpectedDomain||'').toLowerCase()===P2P_DOMAIN&&d.p2pVerifiedVersion===P2P_VERSION&&String(d.p2pVerifiedDomain||'').toLowerCase()===P2P_DOMAIN}
+function setEscrowPredeploy(){
+  $('escrowKpi').textContent='V1.3 · PRE-DEPLOY';$('escrowKpi').className='warn';$('arcDeployTitle').textContent='ARC DEPLOY · PENDIENTE';$('arcDeployText').textContent='Aún no hay una dirección de escrow ARC verificada en este navegador.';$('arcAssetTitle').textContent='ASSET · NO BOUND';$('arcAssetText').textContent='No se habilita pago fiat hasta verificar USDC, monto, comprador, vendedor y orderRef on-chain.';$('marketMode').textContent='ARC TESTNET · PRE-ESCROW';
+}
+function setEscrowBlocked(message){
+  $('escrowKpi').textContent='V1.3 · BLOCKED';$('escrowKpi').className='bad';$('arcDeployTitle').textContent='ARC DEPLOY · NO VERIFICADO';$('arcDeployText').textContent='FAIL CLOSED: '+String(message||'registro/deploy no verificable');$('arcAssetTitle').textContent='ASSET · BLOCKED';$('arcAssetText').textContent='No se habilitan pasos de pago ni liberación mientras falle la identidad local u on-chain.';$('marketMode').textContent='ARC TESTNET · FAIL CLOSED';
+}
 async function refreshEscrowStatus(){
-  let d={};try{d=JSON.parse(localStorage.getItem(DEPLOY_STATE_KEY)||'{}')}catch{}
+  let d={};try{d=JSON.parse(localStorage.getItem(DEPLOY_STATE_KEY)||'{}')||{}}catch{setEscrowBlocked('registro local corrupto');return}
   const escrow=d.p2pEscrow,arbiter=d.p2pArbiter;
-  if(!validAddress(escrow)||!validAddress(arbiter)){$('escrowKpi').textContent='V1.3 · PRE-DEPLOY';$('escrowKpi').className='warn';$('arcDeployTitle').textContent='ARC DEPLOY · PENDIENTE';$('arcDeployText').textContent='Aún no hay una dirección de escrow ARC verificada en este navegador.';$('arcAssetTitle').textContent='ASSET · NO BOUND';$('arcAssetText').textContent='No se habilita pago fiat hasta verificar USDC, monto, comprador, vendedor y orderRef on-chain.';$('marketMode').textContent='ARC TESTNET · PRE-ESCROW';return}
+  if(!escrow&&!arbiter){setEscrowPredeploy();return}
+  if(!validAddress(escrow)||!validAddress(arbiter)){setEscrowBlocked('registro local incompleto');return}
   try{
+    if(!deploymentRecordOk(d))throw Error('registro local no corresponde a ARC / build P2P V1.3 atestado');
     const chain=String(await A.rpc('eth_chainId')).toLowerCase();if(chain!==A.C.chain)throw Error('RPC fuera de Arc Testnet 5042002');
     const code=await A.rpc('eth_getCode',[escrow,'latest']);if(!code||code==='0x')throw Error('dirección sin bytecode');
     const asset=decodeAddress(await A.call(escrow,ESCROW_SEL.asset)),onArbiter=decodeAddress(await A.call(escrow,ESCROW_SEL.arbiter));
     const version=decodeString(await A.call(escrow,ESCROW_SEL.version)),domain=String(await A.call(escrow,ESCROW_SEL.domain)).toLowerCase();
-    if(asset.toLowerCase()!==A.C.usdc.toLowerCase())throw Error('asset() no es USDC ARC');
-    if(onArbiter.toLowerCase()!==arbiter.toLowerCase())throw Error('arbiter() no coincide');
+    if(!sameAddress(asset,A.C.usdc))throw Error('asset() no es USDC ARC');
+    if(!sameAddress(onArbiter,arbiter))throw Error('arbiter() no coincide');
     if(version!==P2P_VERSION)throw Error('VERSION() no coincide');
     if(domain!==P2P_DOMAIN)throw Error('ORDER_REF_DOMAIN() no coincide');
-    $('escrowKpi').textContent='V1.3 · ON-CHAIN';$('escrowKpi').className='good';$('arcDeployTitle').textContent='ARC DEPLOY · VERIFIED ON-CHAIN';$('arcDeployText').innerHTML=`${short(escrow)} · configuración V1.3 válida en ARC. <a target="_blank" rel="noreferrer" href="${A.C.explorer}/address/${escrow}">Ver contrato ↗</a>`;$('arcAssetTitle').textContent='ASSET · USDC VERIFIED';$('arcAssetText').textContent='USDC ARC y árbitro coinciden on-chain. El paso fiat sigue bloqueado hasta terminar reconciliación backend ↔ escrow.';$('marketMode').textContent='ARC TESTNET · ESCROW DEPLOYED · PRE-INTEGRATION';
-  }catch(e){$('escrowKpi').textContent='V1.3 · BLOCKED';$('escrowKpi').className='bad';$('arcDeployTitle').textContent='ARC DEPLOY · NO VERIFICADO';$('arcDeployText').textContent='FAIL CLOSED: '+String(e.message||e);$('arcAssetTitle').textContent='ASSET · BLOCKED';$('arcAssetText').textContent='No se habilitan pasos de pago ni liberación mientras falle la verificación on-chain.';$('marketMode').textContent='ARC TESTNET · FAIL CLOSED'}
+    $('escrowKpi').textContent='V1.3 · ON-CHAIN';$('escrowKpi').className='good';$('arcDeployTitle').textContent='ARC DEPLOY · VERIFIED ON-CHAIN';$('arcDeployText').innerHTML=`${short(escrow)} · record V${P2P_RECORD_SCHEMA} + runtime V1.3 válidos en ARC. <a target="_blank" rel="noreferrer" href="${A.C.explorer}/address/${escrow}">Ver contrato ↗</a>`;$('arcAssetTitle').textContent='ASSET · USDC VERIFIED';$('arcAssetText').textContent='USDC ARC, árbitro, build, source hash, versión y dominio coinciden. El paso fiat sigue bloqueado hasta terminar reconciliación backend ↔ escrow.';$('marketMode').textContent='ARC TESTNET · ESCROW DEPLOYED · PRE-INTEGRATION';
+  }catch(e){setEscrowBlocked(e.message)}
 }
 async function api(action,payload={},auth=false){let h={'content-type':'application/json'};if(auth&&session)h.authorization='Bearer '+session;let r=await fetch(ENDPOINT,{method:'POST',headers:h,body:JSON.stringify({action,...payload})});let j=await r.json().catch(()=>({ok:false,error:'invalid_response'}));if(!r.ok||!j.ok)throw Error(j.error||('HTTP '+r.status));return j}
 function toastError(e){let m=String(e?.message||e);const map={unauthorized:'Sesión expirada. Inicia sesión nuevamente.',self_trade:'No puedes tomar tu propia oferta.',amount_out_of_range:'Monto fuera de los límites de la oferta.',offer_unavailable:'La oferta ya no está disponible.',risk_review_required:'Operación retenida por el agente de riesgo.',trade_not_cancellable:'La operación ya no puede cancelarse.',invalid_transition:'Ese cambio de estado no está permitido.'};A.toast(map[m]||m)}
