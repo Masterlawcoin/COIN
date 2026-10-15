@@ -16,6 +16,9 @@ on:
       - 'test/**'
       - 'package.json'
 
+permissions:
+  contents: write
+
 jobs:
   compile-and-test:
     runs-on: ubuntu-latest
@@ -37,3 +40,15 @@ jobs:
           name: arcx-v2-artifacts
           path: build/artifacts.json
           retention-days: 14
+      - name: Publish verified artifact to repository
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f build/artifacts.json
+          if git diff --cached --quiet; then
+            echo "Artifact unchanged"
+          else
+            git commit -m "chore: publish verified ARCX V2 artifacts [skip ci]"
+            git push
+          fi
