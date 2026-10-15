@@ -7,13 +7,16 @@ interface IMLXERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 }
 
-/// @title MasterlawEX P2P Escrow V1.2
+/// @title MasterlawEX P2P Escrow V1.3
 /// @notice Non-custodial USDC escrow candidate for EVM testnet P2P trades.
 /// @dev No fiat settlement is performed on-chain. The contract only controls the crypto leg.
 ///      Exact balance-delta checks intentionally reject fee-on-transfer/rebasing assets.
-///      Each escrow is bound to one unique external order hash so the off-chain P2P order
-///      can be reconciled unambiguously without publishing private order metadata on-chain.
+///      Each escrow derives a unique order reference from domain + chain + contract + opaque
+///      external trade-id hash, preventing accidental cross-network/cross-contract collisions.
 contract MasterlawEXP2PEscrow {
+    string public constant VERSION = "1.3.0-testnet";
+    bytes32 public constant ORDER_REF_DOMAIN = keccak256("MASTERLAWEX_P2P_ORDER_REF_V1");
+
     enum State { None, Funded, PaymentMarked, Released, Cancelled, Disputed, Refunded }
 
     struct Trade {
@@ -78,14 +81,22 @@ contract MasterlawEXP2PEscrow {
         arbiter = arbiter_;
     }
 
-    /// @notice Seller locks the exact asset amount for a specific buyer and external order reference.
+    /// @notice Computes the canonical on-chain order reference for one opaque off-chain trade-id hash.
+    /// @dev The input should be a hash of the private backend trade identifier, never bank/payment data.
+    function computeOrderRef(bytes32 externalTradeIdHash) public view returns (bytes32) {
+        if (externalTradeIdHash == bytes32(0)) revert InvalidReference();
+        return keccak256(abi.encode(ORDER_REF_DOMAIN, block.chainid, address(this), externalTradeIdHash));
+    }
+
+    /// @notice Seller locks the exact asset amount for a specific buyer and opaque external trade-id hash.
     /// @dev Timeout must be between 10 minutes and 24 hours. Fee-on-transfer assets are rejected.
-    function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds, bytes32 orderRef) external nonReentrant returns (uint256 tradeId) {
+    function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds, bytes32 externalTradeIdHash) external nonReentrant returns (uint256 tradeId) {
         if (newTradesPaused) revert Paused();
         if (buyer == address(0) || buyer == msg.sender) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (timeoutSeconds < 10 minutes || timeoutSeconds > 24 hours) revert InvalidTimeout();
-        if (orderRef == bytes32(0)) revert InvalidReference();
+
+        bytes32 orderRef = computeOrderRef(externalTradeIdHash);
         if (tradeIdByReference[orderRef] != 0) revert ReferenceInUse();
 
         tradeId = nextTradeId++;
