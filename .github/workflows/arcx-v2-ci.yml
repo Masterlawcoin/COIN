@@ -19,6 +19,10 @@ on:
       - 'package-lock.json'
       - '.github/workflows/arcx-v2-ci.yml'
 
+concurrency:
+  group: arcx-v2-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -33,10 +37,24 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "Bootstrapping package-lock.json once from exact dependency pins"
+            npm install --no-audit --no-fund
+          fi
       - name: Compile Solidity
         run: npm run build
+      - name: Verify deterministic build
+        shell: bash
+        run: |
+          cp build/artifacts.json /tmp/artifacts.first.json
+          npm run build
+          cmp /tmp/artifacts.first.json build/artifacts.json
+          sha256sum build/artifacts.json
       - name: Integration test
         run: npm test
       - name: Upload compiled artifacts
@@ -44,6 +62,12 @@ jobs:
         with:
           name: arcx-v2-artifacts
           path: build/artifacts.json
+          retention-days: 14
+      - name: Upload dependency lock
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: arcx-v2-lockfile
+          path: package-lock.json
           retention-days: 14
 
   publish-artifact:
@@ -60,14 +84,20 @@ jobs:
         with:
           name: arcx-v2-artifacts
           path: build
-      - name: Publish verified artifact to repository
+      - name: Download verified dependency lock
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: arcx-v2-lockfile
+          path: .
+      - name: Publish verified build and lockfile to repository
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f build/artifacts.json
+          git add -f build/artifacts.json package-lock.json
           if git diff --cached --quiet; then
-            echo "Artifact unchanged"
+            echo "Verified build and dependency lock unchanged"
           else
-            git commit -m "chore: publish verified ARCX V2 artifacts [skip ci]"
+            git commit -m "chore: publish verified protocol build [skip ci]"
             git push
           fi
