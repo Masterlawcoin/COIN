@@ -6,6 +6,9 @@ on:
     paths:
       - 'contracts/**'
       - 'scripts/**'
+      - 'deploy/**'
+      - 'docs/P2P_ESCROW_INTEGRATION.md'
+      - 'web-overlay/base/core.js'
       - 'test/**'
       - 'package.json'
       - 'package-lock.json'
@@ -14,6 +17,9 @@ on:
     paths:
       - 'contracts/**'
       - 'scripts/**'
+      - 'deploy/**'
+      - 'docs/P2P_ESCROW_INTEGRATION.md'
+      - 'web-overlay/base/core.js'
       - 'test/**'
       - 'package.json'
       - 'package-lock.json'
@@ -46,7 +52,31 @@ jobs:
             echo "Bootstrapping package-lock.json once from exact dependency pins"
             npm install --no-audit --no-fund
           fi
-      - name: Validate deployment tooling
+      - name: Enforce ARC-only network lock
+        shell: bash
+        run: |
+          if grep -R -n -E '84532|basescan\.org' contracts scripts deploy docs web-overlay package.json; then
+            echo "Non-ARC network reference detected"
+            exit 1
+          fi
+          node <<'NODE'
+          const fs = require('fs');
+          const core = fs.readFileSync('web-overlay/base/core.js', 'utf8');
+          const deployer = fs.readFileSync('scripts/deploy-p2p-testnet.js', 'utf8');
+          const requiredCore = [
+            "chain:'0x4cef52'",
+            "rpc:'https://rpc.testnet.arc.io'",
+            "explorer:'https://explorer.testnet.arc.io'"
+          ];
+          for (const value of requiredCore) {
+            if (!core.includes(value)) throw new Error(`ARC frontend lock missing: ${value}`);
+          }
+          for (const value of ['5042002n', 'https://rpc.testnet.arc.io', 'https://explorer.testnet.arc.io']) {
+            if (!deployer.includes(value)) throw new Error(`ARC deploy lock missing: ${value}`);
+          }
+          console.log('ARC-ONLY NETWORK LOCK PASS');
+          NODE
+      - name: Validate ARC deployment tooling
         run: node --check scripts/deploy-p2p-testnet.js
       - name: Compile Solidity
         run: npm run build
