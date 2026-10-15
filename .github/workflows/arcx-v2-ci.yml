@@ -11,6 +11,7 @@ on:
       - 'web-overlay/base/core.js'
       - 'web-overlay/base/protocol.js'
       - 'web-overlay/p2p.js'
+      - 'web-overlay/mediation.js'
       - 'test/**'
       - 'package.json'
       - 'package-lock.json'
@@ -24,6 +25,7 @@ on:
       - 'web-overlay/base/core.js'
       - 'web-overlay/base/protocol.js'
       - 'web-overlay/p2p.js'
+      - 'web-overlay/mediation.js'
       - 'test/**'
       - 'package.json'
       - 'package-lock.json'
@@ -68,6 +70,7 @@ jobs:
           const core = fs.readFileSync('web-overlay/base/core.js', 'utf8');
           const deployer = fs.readFileSync('scripts/deploy-p2p-testnet.js', 'utf8');
           const deployerV14 = fs.readFileSync('scripts/deploy-p2p-v14-arc.js', 'utf8');
+          const adminV14 = fs.readFileSync('scripts/p2p-v14-admin.js', 'utf8');
           const requiredCore = [
             "chain:'0x4cef52'",
             "rpc:'https://rpc.testnet.arc.io'",
@@ -78,9 +81,9 @@ jobs:
           for (const value of requiredCore) {
             if (!core.includes(value)) throw new Error(`ARC frontend lock missing: ${value}`);
           }
-          for (const text of [deployer, deployerV14]) {
+          for (const text of [deployer, deployerV14, adminV14]) {
             for (const value of ['5042002n', 'https://rpc.testnet.arc.io', 'https://testnet.arcscan.app']) {
-              if (!text.includes(value)) throw new Error(`ARC deploy lock missing: ${value}`);
+              if (!text.includes(value)) throw new Error(`ARC tooling lock missing: ${value}`);
             }
           }
           console.log('ARC-ONLY NETWORK LOCK PASS');
@@ -121,10 +124,23 @@ jobs:
           if (!p2p.includes("P2P_RECORD_SCHEMA=3")) throw new Error('P2P deployment record schema lock missing');
           console.log('P2P BROWSER ABI LOCK PASS', { protocolSelectors, p2pSelectors, domain });
           NODE
-      - name: Validate ARC deployment tooling
+      - name: Validate ARC deployment and mediation tooling
+        shell: bash
         run: |
           node --check scripts/deploy-p2p-testnet.js
           node --check scripts/deploy-p2p-v14-arc.js
+          node --check scripts/p2p-v14-admin.js
+          node <<'NODE'
+          const fs = require('fs');
+          const admin = fs.readFileSync('scripts/p2p-v14-admin.js', 'utf8');
+          for (const forbidden of ['eth_sendTransaction','sendTransaction(','P2P_ARBITER_PRIVATE_KEY','new ethers.Wallet']) {
+            if (admin.includes(forbidden)) throw new Error(`prepare-only admin tool contains forbidden signing/broadcast surface: ${forbidden}`);
+          }
+          for (const required of ['PREPARE_ONLY_MULTISIG_SAFE','openDisputeByArbiter','resolveDispute','safeTransaction']) {
+            if (!admin.includes(required)) throw new Error(`admin mediation guard missing: ${required}`);
+          }
+          console.log('P2P V1.4 PREPARE-ONLY ADMIN PASS');
+          NODE
       - name: Compile Solidity
         run: npm run build
       - name: Verify deterministic build and V1.4 mediation surface
@@ -146,6 +162,12 @@ jobs:
           for (const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw']) {
             if (names.includes(forbidden)) throw new Error(`unsafe V1.4 admin withdrawal function ${forbidden}`);
           }
+          const ids=v14.methodIdentifiers;
+          for (const sig of ['openDisputeByArbiter(uint256,bytes32)','resolveDispute(uint256,bool,bytes32)','trades(uint256)','caseHashByTrade(uint256)','resolutionHashByTrade(uint256)']) {
+            const expected=ethersId(sig);
+            if (ids?.[sig] !== expected) throw new Error(`method identifier mismatch ${sig}: ${ids?.[sig]} vs ${expected}`);
+          }
+          function ethersId(sig){ return require('ethers').ethers.id(sig).slice(2,10); }
           console.log('P2P V1.4 MEDIATION ABI PASS');
           NODE
           sha256sum build/artifacts.json
