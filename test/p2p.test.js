@@ -83,49 +83,67 @@ function equal(actual, expected, label) {
   const amount = ethers.parseUnits('100', 6);
   await (await usdc.approve(escrowAddr, ethers.MaxUint256)).wait();
 
+  equal(await escrow.VERSION(), '1.3.0-testnet', 'runtime contract version');
+  equal(
+    await escrow.ORDER_REF_DOMAIN(),
+    ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1')),
+    'order reference domain'
+  );
+
   let refNonce = 1;
-  const makeRef = label => ethers.keccak256(ethers.toUtf8Bytes(`masterlawex:p2p:${label}`));
-  const freshRef = label => makeRef(`${label}:${refNonce++}`);
-  const create = async (timeout = 900, value = amount, who = buyerAddr, reference = freshRef('trade')) => {
+  const externalHash = label => ethers.keccak256(ethers.toUtf8Bytes(`masterlawex:p2p:external:${label}`));
+  const freshExternalHash = label => externalHash(`${label}:${refNonce++}`);
+  const canonical = input => escrow.computeOrderRef(input);
+  const create = async (timeout = 900, value = amount, who = buyerAddr, externalTradeIdHash = freshExternalHash('trade')) => {
     const id = await escrow.nextTradeId();
-    await (await escrow.createTrade(who, value, timeout, reference)).wait();
+    const expectedRef = await canonical(externalTradeIdHash);
+    await (await escrow.createTrade(who, value, timeout, externalTradeIdHash)).wait();
     const stored = await escrow.trades(id);
-    equal(stored.orderRef, reference, 'trade reference stored');
-    equal(await escrow.tradeIdByReference(reference), id, 'reference reverse lookup');
+    equal(stored.orderRef, expectedRef, 'canonical trade reference stored');
+    equal(await escrow.tradeIdByReference(expectedRef), id, 'canonical reference reverse lookup');
     return id;
   };
+
+  // Domain separation: same opaque backend id must produce a different reference on another escrow contract.
+  const sameExternalId = freshExternalHash('domain-separation');
+  const escrow2 = await deploy(C.E, [usdcAddr, arbiterAddr]);
+  const ref1 = await escrow.computeOrderRef(sameExternalId);
+  const ref2 = await escrow2.computeOrderRef(sameExternalId);
+  if (ref1 === ref2) throw Error('order reference is not contract-domain-separated');
 
   // Constructor and creation guardrails.
   await mustRevert(() => deploy(C.E, [ethers.ZeroAddress, arbiterAddr]), 'zero asset');
   await mustRevert(() => deploy(C.E, [sellerAddr, arbiterAddr]), 'EOA asset');
   await mustRevert(() => deploy(C.E, [usdcAddr, ethers.ZeroAddress]), 'zero arbiter');
-  await mustRevert(() => escrow.createTrade(ethers.ZeroAddress, amount, 900, freshRef('zero-buyer')), 'zero buyer');
-  await mustRevert(() => escrow.createTrade(sellerAddr, amount, 900, freshRef('self-buyer')), 'seller equals buyer');
-  await mustRevert(() => escrow.createTrade(buyerAddr, 0, 900, freshRef('zero-amount')), 'zero amount');
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599, freshRef('short-timeout')), 'timeout too short');
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401, freshRef('long-timeout')), 'timeout too long');
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900, ethers.ZeroHash), 'zero reference');
+  await mustRevert(() => escrow.computeOrderRef(ethers.ZeroHash), 'zero external trade id hash');
+  await mustRevert(() => escrow.createTrade(ethers.ZeroAddress, amount, 900, freshExternalHash('zero-buyer')), 'zero buyer');
+  await mustRevert(() => escrow.createTrade(sellerAddr, amount, 900, freshExternalHash('self-buyer')), 'seller equals buyer');
+  await mustRevert(() => escrow.createTrade(buyerAddr, 0, 900, freshExternalHash('zero-amount')), 'zero amount');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599, freshExternalHash('short-timeout')), 'timeout too short');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401, freshExternalHash('long-timeout')), 'timeout too long');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900, ethers.ZeroHash), 'zero reference input');
 
-  // One off-chain order reference can bind to exactly one escrow for the lifetime of the contract.
-  const duplicateRef = freshRef('duplicate-reference');
-  const duplicateTrade = await create(904, amount + 4n, buyerAddr, duplicateRef);
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 5n, 905, duplicateRef), 'duplicate reference');
+  // One opaque off-chain order id can bind to exactly one escrow for the lifetime of this contract.
+  const duplicateExternal = freshExternalHash('duplicate-reference');
+  const duplicateRef = await canonical(duplicateExternal);
+  const duplicateTrade = await create(904, amount + 4n, buyerAddr, duplicateExternal);
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 5n, 905, duplicateExternal), 'duplicate reference');
   equal(await escrow.tradeIdByReference(duplicateRef), duplicateTrade, 'duplicate reference remains bound to original trade');
   await (await escrow.connect(buyer).cancelByBuyer(duplicateTrade)).wait();
 
   // Exact funding: a fee-on-transfer asset cannot make escrow accounting insolvent.
   const nextBeforeFee = await escrow.nextTradeId();
   const escrowBeforeFee = await usdc.balanceOf(escrowAddr);
-  const feeFundingRef = freshRef('fee-funding');
+  const feeFundingExternal = freshExternalHash('fee-funding');
+  const feeFundingRef = await canonical(feeFundingExternal);
   await (await usdc.setFeeBps(100)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 2n, 901, feeFundingRef), 'fee-on-transfer funding');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 2n, 901, feeFundingExternal), 'fee-on-transfer funding');
   equal(await escrow.nextTradeId(), nextBeforeFee, 'failed fee funding rolls back trade id');
   equal(await escrow.tradeIdByReference(feeFundingRef), 0n, 'failed fee funding rolls back reference binding');
   equal(await usdc.balanceOf(escrowAddr), escrowBeforeFee, 'failed fee funding rolls back balance');
   await (await usdc.setFeeBps(0)).wait();
 
-  // Use dedicated trades for expected reverts so Ganache cannot reuse a stale eth_estimateGas rejection
-  // when the same calldata later becomes valid after a state/time change.
+  // Use dedicated trades for expected reverts so Ganache cannot reuse stale gas-estimation failures.
   const preReleaseTrade = await create();
   await mustRevert(() => escrow.release(preReleaseTrade), 'seller cannot release before payment');
   await (await escrow.connect(buyer).cancelByBuyer(preReleaseTrade)).wait();
@@ -154,7 +172,7 @@ function equal(actual, expected, label) {
   equal((await escrow.trades(trade2)).state, 4n, 'cancelled state');
   await mustRevert(() => escrow.connect(buyer).cancelByBuyer(trade2), 'double cancel');
 
-  // Early reclaim check uses its own trade; the real expired reclaim uses another trade id.
+  // Expiry lifecycle.
   const earlyExpiryTrade = await create(600);
   await mustRevert(() => escrow.cancelExpired(earlyExpiryTrade), 'early seller reclaim');
   await (await escrow.connect(buyer).cancelByBuyer(earlyExpiryTrade)).wait();
@@ -168,7 +186,7 @@ function equal(actual, expected, label) {
   await (await escrow.cancelExpired(trade3)).wait();
   equal(await usdc.balanceOf(sellerAddr), sellerBefore3, 'expired seller refund');
 
-  // Dispute freezes the normal lifecycle and only the arbiter can resolve.
+  // Dispute freezes normal lifecycle and only arbiter can resolve.
   const trade4 = await create();
   await (await escrow.connect(buyer).markPaymentSent(trade4)).wait();
   await mustRevert(() => escrow.connect(outsider).openDispute(trade4), 'outsider dispute');
@@ -190,10 +208,11 @@ function equal(actual, expected, label) {
   equal(await usdc.balanceOf(sellerAddr), sellerBefore5, 'arbiter seller refund');
   equal((await escrow.trades(trade5)).state, 6n, 'refunded state');
 
-  // ERC-20 failures must revert atomically; failed funding cannot consume the external reference.
-  const transferFailRef = freshRef('transferfrom-failure');
+  // ERC-20 failures must revert atomically and cannot consume order references.
+  const transferFailExternal = freshExternalHash('transferfrom-failure');
+  const transferFailRef = await canonical(transferFailExternal);
   await (await usdc.setFailures(false, true)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 1n, 900, transferFailRef), 'transferFrom false');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount + 1n, 900, transferFailExternal), 'transferFrom false');
   equal(await escrow.tradeIdByReference(transferFailRef), 0n, 'transferFrom failure rolls back reference binding');
   await (await usdc.setFailures(false, false)).wait();
   const trade6 = await create();
@@ -206,7 +225,7 @@ function equal(actual, expected, label) {
   await (await escrow.connect(arbiter).resolveDispute(trade6, false)).wait();
   equal((await escrow.trades(trade6)).state, 6n, 'failed-release trade safely resolved');
 
-  // Exact payout: a token that begins charging a fee after funding cannot short-change the recipient.
+  // Exact payout: a token that begins charging a fee after funding cannot short-change recipient.
   const tradeFeeOut = await create(902, amount + 3n);
   await (await escrow.connect(buyer).markPaymentSent(tradeFeeOut)).wait();
   const escrowBeforeFeeOut = await usdc.balanceOf(escrowAddr);
@@ -220,15 +239,15 @@ function equal(actual, expected, label) {
   await (await escrow.openDispute(tradeFeeOut)).wait();
   await (await escrow.connect(arbiter).resolveDispute(tradeFeeOut, false)).wait();
 
-  // Pausing blocks only new trades; existing escrow lifecycle remains available.
+  // Pausing blocks only new trades; existing lifecycle remains available.
   const trade7 = await create();
   await mustRevert(() => escrow.connect(outsider).setNewTradesPaused(true), 'non-arbiter pause');
   await (await escrow.connect(arbiter).setNewTradesPaused(true)).wait();
-  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900, freshRef('paused-create')), 'paused create');
+  await mustRevert(() => escrow.createTrade(buyerAddr, amount, 900, freshExternalHash('paused-create')), 'paused create');
   await (await escrow.connect(buyer).cancelByBuyer(trade7)).wait();
   await (await escrow.connect(arbiter).setNewTradesPaused(false)).wait();
 
-  // Two-step arbiter rotation: invalid proposals rejected; old arbiter loses authority after acceptance.
+  // Two-step arbiter rotation.
   await mustRevert(() => escrow.connect(outsider).proposeArbiter(outsiderAddr), 'non-arbiter proposal');
   await mustRevert(() => escrow.connect(arbiter).proposeArbiter(ethers.ZeroAddress), 'zero arbiter proposal');
   await mustRevert(() => escrow.connect(arbiter).proposeArbiter(arbiterAddr), 'same arbiter proposal');
@@ -242,7 +261,7 @@ function equal(actual, expected, label) {
   await (await escrow.connect(nextArbiter).setNewTradesPaused(true)).wait();
   await (await escrow.connect(nextArbiter).setNewTradesPaused(false)).wait();
 
-  console.log('MASTERLAWEX P2P ESCROW V1.2 ADVERSARIAL TEST PASS');
+  console.log('MASTERLAWEX P2P ESCROW V1.3 ADVERSARIAL TEST PASS');
 })().catch(e => {
   console.error(e);
   process.exit(1);
