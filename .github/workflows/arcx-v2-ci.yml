@@ -7,7 +7,7 @@ on:
       - 'contracts/**'
       - 'scripts/**'
       - 'deploy/**'
-      - 'docs/P2P_ESCROW_INTEGRATION.md'
+      - 'docs/**'
       - 'web-overlay/base/core.js'
       - 'web-overlay/base/protocol.js'
       - 'web-overlay/p2p.js'
@@ -20,7 +20,7 @@ on:
       - 'contracts/**'
       - 'scripts/**'
       - 'deploy/**'
-      - 'docs/P2P_ESCROW_INTEGRATION.md'
+      - 'docs/**'
       - 'web-overlay/base/core.js'
       - 'web-overlay/base/protocol.js'
       - 'web-overlay/p2p.js'
@@ -67,6 +67,7 @@ jobs:
           const fs = require('fs');
           const core = fs.readFileSync('web-overlay/base/core.js', 'utf8');
           const deployer = fs.readFileSync('scripts/deploy-p2p-testnet.js', 'utf8');
+          const deployerV14 = fs.readFileSync('scripts/deploy-p2p-v14-arc.js', 'utf8');
           const requiredCore = [
             "chain:'0x4cef52'",
             "rpc:'https://rpc.testnet.arc.io'",
@@ -77,8 +78,10 @@ jobs:
           for (const value of requiredCore) {
             if (!core.includes(value)) throw new Error(`ARC frontend lock missing: ${value}`);
           }
-          for (const value of ['5042002n', 'https://rpc.testnet.arc.io', 'https://testnet.arcscan.app']) {
-            if (!deployer.includes(value)) throw new Error(`ARC deploy lock missing: ${value}`);
+          for (const text of [deployer, deployerV14]) {
+            for (const value of ['5042002n', 'https://rpc.testnet.arc.io', 'https://testnet.arcscan.app']) {
+              if (!text.includes(value)) throw new Error(`ARC deploy lock missing: ${value}`);
+            }
           }
           console.log('ARC-ONLY NETWORK LOCK PASS');
           NODE
@@ -119,16 +122,32 @@ jobs:
           console.log('P2P BROWSER ABI LOCK PASS', { protocolSelectors, p2pSelectors, domain });
           NODE
       - name: Validate ARC deployment tooling
-        run: node --check scripts/deploy-p2p-testnet.js
+        run: |
+          node --check scripts/deploy-p2p-testnet.js
+          node --check scripts/deploy-p2p-v14-arc.js
       - name: Compile Solidity
         run: npm run build
-      - name: Verify deterministic build
+      - name: Verify deterministic build and V1.4 mediation surface
         shell: bash
         run: |
           cp build/artifacts.json /tmp/artifacts.first.json
           npm run build
           cmp /tmp/artifacts.first.json build/artifacts.json
-          node -e "const a=require('./build/artifacts.json'); if(a._meta?.schema!==2||!a._meta?.buildId||!a.MasterlawEXP2PEscrow?.bytecodeSha256) process.exit(1)"
+          node <<'NODE'
+          const a = require('./build/artifacts.json');
+          if (a._meta?.schema !== 2 || !a._meta?.buildId) throw new Error('missing build metadata');
+          if (!a.MasterlawEXP2PEscrow?.bytecodeSha256) throw new Error('V1.3 artifact missing');
+          const v14 = a.MasterlawEXP2PEscrowV14;
+          if (!v14?.bytecodeSha256 || v14.source !== 'contracts/MasterlawEXP2PEscrowV14.sol') throw new Error('V1.4 artifact missing');
+          const names = v14.abi.filter(x => x.type === 'function').map(x => x.name);
+          for (const required of ['openDisputeByArbiter','resolveDispute','proposeMutualSplit','approveMutualSplit','caseHashByTrade','resolutionHashByTrade']) {
+            if (!names.includes(required)) throw new Error(`V1.4 mediation ABI missing ${required}`);
+          }
+          for (const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw']) {
+            if (names.includes(forbidden)) throw new Error(`unsafe V1.4 admin withdrawal function ${forbidden}`);
+          }
+          console.log('P2P V1.4 MEDIATION ABI PASS');
+          NODE
           sha256sum build/artifacts.json
       - name: Integration test
         run: npm test
