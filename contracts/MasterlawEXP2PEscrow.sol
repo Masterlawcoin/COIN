@@ -11,7 +11,7 @@ interface IMLXERC20 {
 /// @notice Non-custodial USDC escrow candidate for EVM testnet P2P trades.
 /// @dev No fiat settlement is performed on-chain. The contract only controls the crypto leg.
 ///      Exact balance-delta checks intentionally reject fee-on-transfer/rebasing assets.
-///      Each escrow is bound to one unique external reference hash so the off-chain P2P order
+///      Each escrow is bound to one unique external order hash so the off-chain P2P order
 ///      can be reconciled unambiguously without publishing private order metadata on-chain.
 contract MasterlawEXP2PEscrow {
     enum State { None, Funded, PaymentMarked, Released, Cancelled, Disputed, Refunded }
@@ -23,7 +23,7 @@ contract MasterlawEXP2PEscrow {
         uint64 createdAt;
         uint64 deadline;
         State state;
-        bytes32 reference;
+        bytes32 orderRef;
     }
 
     IMLXERC20 public immutable asset;
@@ -36,7 +36,7 @@ contract MasterlawEXP2PEscrow {
 
     uint256 private _lock = 1;
 
-    event TradeCreated(uint256 indexed tradeId, bytes32 indexed reference, address indexed seller, address buyer, uint256 amount, uint64 deadline);
+    event TradeCreated(uint256 indexed tradeId, bytes32 indexed orderRef, address indexed seller, address buyer, uint256 amount, uint64 deadline);
     event PaymentMarked(uint256 indexed tradeId, address indexed buyer);
     event Released(uint256 indexed tradeId, address indexed buyer, uint256 amount);
     event Cancelled(uint256 indexed tradeId, address indexed by, uint256 amount);
@@ -80,13 +80,13 @@ contract MasterlawEXP2PEscrow {
 
     /// @notice Seller locks the exact asset amount for a specific buyer and external order reference.
     /// @dev Timeout must be between 10 minutes and 24 hours. Fee-on-transfer assets are rejected.
-    function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds, bytes32 reference) external nonReentrant returns (uint256 tradeId) {
+    function createTrade(address buyer, uint256 amount, uint64 timeoutSeconds, bytes32 orderRef) external nonReentrant returns (uint256 tradeId) {
         if (newTradesPaused) revert Paused();
         if (buyer == address(0) || buyer == msg.sender) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (timeoutSeconds < 10 minutes || timeoutSeconds > 24 hours) revert InvalidTimeout();
-        if (reference == bytes32(0)) revert InvalidReference();
-        if (tradeIdByReference[reference] != 0) revert ReferenceInUse();
+        if (orderRef == bytes32(0)) revert InvalidReference();
+        if (tradeIdByReference[orderRef] != 0) revert ReferenceInUse();
 
         tradeId = nextTradeId++;
         uint64 nowTs = uint64(block.timestamp);
@@ -98,12 +98,12 @@ contract MasterlawEXP2PEscrow {
             createdAt: nowTs,
             deadline: deadline,
             state: State.Funded,
-            reference: reference
+            orderRef: orderRef
         });
-        tradeIdByReference[reference] = tradeId;
+        tradeIdByReference[orderRef] = tradeId;
 
         _safeTransferFromExact(msg.sender, amount);
-        emit TradeCreated(tradeId, reference, msg.sender, buyer, amount, deadline);
+        emit TradeCreated(tradeId, orderRef, msg.sender, buyer, amount, deadline);
     }
 
     /// @notice Buyer declares that the off-chain fiat leg has been sent. This does not prove fiat settlement.
