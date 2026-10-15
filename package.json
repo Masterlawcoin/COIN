@@ -9,7 +9,8 @@
     "build": "node scripts/compile.js",
     "test": "node test/core.test.js && node test/p2p.test.js && node test/p2p-v14.test.js",
     "deploy:p2p:arc": "node scripts/deploy-p2p-testnet.js",
-    "deploy:p2p:v14:arc": "node scripts/deploy-p2p-v14-arc.js"
+    "deploy:p2p:v14:arc": "node scripts/deploy-p2p-v14-arc.js",
+    "p2p:v14:admin": "node scripts/p2p-v14-admin.js"
   },
   "dependencies": {
     "ethers": "6.17.0",
