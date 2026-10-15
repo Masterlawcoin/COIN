@@ -1,10 +1,10 @@
 {
-  "name": "arcx-protocol-v2",
-  "version": "0.2.1",
+  "name": "masterlawex-protocol",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "build": "node scripts/compile.js",
-    "test": "node test/core.test.js"
+    "test": "node test/core.test.js && node test/p2p.test.js"
   },
   "dependencies": {
     "ethers": "^6.15.0",
