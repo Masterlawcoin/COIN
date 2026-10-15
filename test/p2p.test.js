@@ -98,11 +98,16 @@ function equal(actual, expected, label) {
   await mustRevert(() => escrow.createTrade(buyerAddr, amount, 599), 'timeout too short');
   await mustRevert(() => escrow.createTrade(buyerAddr, amount, 86401), 'timeout too long');
 
+  // Release cannot happen before buyer marks payment. Use a dedicated trade so a failed eth_estimateGas
+  // for release(id) cannot be reused by local RPC caches for a later valid release of the same id.
+  const preReleaseTrade = await create();
+  await mustRevert(() => escrow.release(preReleaseTrade), 'seller cannot release before payment');
+  await (await escrow.connect(buyer).cancelByBuyer(preReleaseTrade)).wait();
+
   // Happy path: seller funds -> buyer marks paid -> seller releases.
   const trade1 = await create();
   equal(await usdc.balanceOf(escrowAddr), amount, 'escrow funding');
   await mustRevert(() => escrow.connect(buyer).release(trade1), 'buyer cannot release');
-  await mustRevert(() => escrow.release(trade1), 'seller cannot release before payment');
   await mustRevert(() => escrow.connect(outsider).markPaymentSent(trade1), 'outsider cannot mark payment');
   await (await escrow.connect(buyer).markPaymentSent(trade1)).wait();
   await mustRevert(() => escrow.connect(buyer).markPaymentSent(trade1), 'duplicate payment mark');
@@ -166,8 +171,9 @@ function equal(actual, expected, label) {
   await mustRevert(() => escrow.release(trade6), 'transfer false on release');
   equal((await escrow.trades(trade6)).state, 2n, 'failed release state rollback');
   await (await usdc.setFailures(false, false)).wait();
-  await (await escrow.release(trade6)).wait();
-  equal((await escrow.trades(trade6)).state, 3n, 'release after token recovery');
+  await (await escrow.openDispute(trade6)).wait();
+  await (await escrow.connect(arbiter).resolveDispute(trade6, false)).wait();
+  equal((await escrow.trades(trade6)).state, 6n, 'failed-release trade safely resolved');
 
   // Pausing blocks only new trades; existing escrow lifecycle remains available.
   const trade7 = await create();
