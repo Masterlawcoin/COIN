@@ -55,6 +55,7 @@ jobs:
           done
           test -s mediation.html
           test -s mediation.js
+          test -s mediation-admin.js
           ! grep -q 'https://arcx-exchange.vercel.app' build.js
           ! grep -q 'fetch(' build.js
       - name: Validate ARC network and identity configuration
@@ -85,8 +86,16 @@ jobs:
           grep -q 'Vincular wallet ARC' mediation.html
           grep -q 'REAL MONEY · OFF' mediation.html
           grep -q 'broadcastByBrowser:false' mediation.js
+          grep -q 'Masterlaw P2P Case Workspace' mediation.html
+          grep -q '/api/exchange/p2p/admin/state-machine' mediation-admin.js
+          grep -q '/api/exchange/p2p/admin/prepare-case' mediation-admin.js
+          grep -q '/api/exchange/p2p/admin/prepare-evidence' mediation-admin.js
+          grep -q '/api/exchange/p2p/admin/prepare-resolution' mediation-admin.js
+          grep -q 'ADMIN_CONTROL_PLANE_SCOPE_MISMATCH' mediation-admin.js
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' mediation.js
-          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js mediation.html mediation.js
+          ! grep -E 'localStorage|sessionStorage' mediation-admin.js
+          ! grep -E 'eth_sendTransaction|private[_ -]?key|secretKey' mediation-admin.js
+          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js mediation.html mediation.js mediation-admin.js
       - name: JavaScript syntax checks
         run: |
           node --check build.js
@@ -94,6 +103,7 @@ jobs:
           node --check agents.js
           node --check demo.js
           node --check mediation.js
+          node --check mediation-admin.js
           node --check base/core.js
           node --check base/protocol.js
       - name: Build frontend
@@ -110,6 +120,7 @@ jobs:
           test -s dist/protocol.js
           test -s dist/mediation.html
           test -s dist/mediation.js
+          test -s dist/mediation-admin.js
           test -s dist/mediation-abi.js
           test -s dist/app.css
           test -s dist/core.js
@@ -127,12 +138,19 @@ jobs:
           grep -q 'P2P V1.4 · PRE-REAL-MONEY' dist/mediation.html
           grep -q 'Masterlaw KYC + Wallet Gate' dist/mediation.html
           grep -q 'Vincular wallet ARC' dist/mediation.html
+          grep -q 'Masterlaw P2P Case Workspace' dist/mediation.html
+          grep -q 'DB WRITES · OFF' dist/mediation.html
           grep -q '/api/exchange/p2p/bind-wallet' dist/mediation.js
           grep -q "entitlement:'\[MEMORY_ONLY\]'" dist/mediation.js
+          grep -q '/api/exchange/p2p/admin/prepare-case' dist/mediation-admin.js
+          grep -q '/api/exchange/p2p/admin/prepare-evidence' dist/mediation-admin.js
+          grep -q '/api/exchange/p2p/admin/prepare-resolution' dist/mediation-admin.js
           grep -q 'openDisputeByArbiter(uint256,bytes32)' dist/mediation-abi.js
           grep -q 'resolveDispute(uint256,bool,bytes32)' dist/mediation-abi.js
           grep -q 'broadcastByBrowser:false' dist/mediation.js
           ! grep -q 'eth_sendTransaction' dist/mediation.js
+          ! grep -q 'eth_sendTransaction' dist/mediation-admin.js
+          ! grep -E 'localStorage|sessionStorage' dist/mediation-admin.js
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' dist/mediation.js
           grep -q 'AI Control' dist/agents.html
           grep -q "chain:'0x4cef52'" dist/core.js
@@ -142,4 +160,4 @@ jobs:
           grep -q 'ensureChain,wait,send' dist/core.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 25 || { echo "Expected 25 dist files, found $count"; exit 1; }
+          test "$count" -eq 26 || { echo "Expected 26 dist files, found $count"; exit 1; }

@@ -6,13 +6,13 @@
   <title>MasterlawEX · P2P Mediation</title>
   <link rel="stylesheet" href="/app.css">
   <style>
-    .med-wrap{max-width:1240px;margin:0 auto;padding:18px}.med-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.med-card{border:1px solid var(--line,#2b3139);background:var(--panel,#151a21);border-radius:12px;padding:14px}.med-card h2,.med-card h3{margin:0 0 8px}.med-card p{color:var(--muted,#8a919e);font-size:12px}.med-status{display:inline-flex;align-items:center;border:1px solid #474d57;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.05em}.med-status.good{border-color:#0ecb81;color:#0ecb81}.med-status.bad{border-color:#f6465d;color:#f6465d}.med-status.warn{border-color:#f0b90b;color:#f0b90b}.med-form{display:grid;gap:10px}.med-form label{display:grid;gap:5px;font-size:11px;color:var(--muted,#8a919e)}.med-form input,.med-form select,.med-form textarea{width:100%;box-sizing:border-box;border:1px solid #2b3139;background:#0b0e11;color:#eaecef;border-radius:8px;padding:10px;font:inherit}.med-form textarea{min-height:94px;resize:vertical}.med-actions{display:flex;gap:8px;flex-wrap:wrap}.med-btn{border:1px solid #474d57;background:#181a20;color:#eaecef;border-radius:8px;padding:9px 12px;cursor:pointer;font-weight:700}.med-btn.primary{background:#f0b90b;color:#111;border-color:#f0b90b}.med-btn:disabled{opacity:.45;cursor:not-allowed}.med-output{white-space:pre-wrap;word-break:break-word;background:#0b0e11;border:1px solid #2b3139;border-radius:8px;padding:10px;min-height:72px;font:11px/1.5 ui-monospace,monospace}.med-banner{border:1px solid #6a541c;background:#211b09;color:#d8c47f;border-radius:10px;padding:11px 13px;margin-bottom:12px;font-size:12px}.med-kv{display:grid;grid-template-columns:150px 1fr;gap:7px;font-size:11px}.med-kv b{color:#eaecef}.med-kv span{color:#a7adb8;word-break:break-all}@media(max-width:800px){.med-grid{grid-template-columns:1fr}.med-kv{grid-template-columns:1fr}}
+    .med-wrap{max-width:1240px;margin:0 auto;padding:18px}.med-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.med-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.med-card{border:1px solid var(--line,#2b3139);background:var(--panel,#151a21);border-radius:12px;padding:14px}.med-card h2,.med-card h3{margin:0 0 8px}.med-card p{color:var(--muted,#8a919e);font-size:12px}.med-status{display:inline-flex;align-items:center;border:1px solid #474d57;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.05em}.med-status.good{border-color:#0ecb81;color:#0ecb81}.med-status.bad{border-color:#f6465d;color:#f6465d}.med-status.warn{border-color:#f0b90b;color:#f0b90b}.med-form{display:grid;gap:10px}.med-form label{display:grid;gap:5px;font-size:11px;color:var(--muted,#8a919e)}.med-form input,.med-form select,.med-form textarea{width:100%;box-sizing:border-box;border:1px solid #2b3139;background:#0b0e11;color:#eaecef;border-radius:8px;padding:10px;font:inherit}.med-form textarea{min-height:94px;resize:vertical}.med-check{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px!important}.med-check input{width:auto!important}.med-actions{display:flex;gap:8px;flex-wrap:wrap}.med-btn{border:1px solid #474d57;background:#181a20;color:#eaecef;border-radius:8px;padding:9px 12px;cursor:pointer;font-weight:700}.med-btn.primary{background:#f0b90b;color:#111;border-color:#f0b90b}.med-btn:disabled{opacity:.45;cursor:not-allowed}.med-output{white-space:pre-wrap;word-break:break-word;background:#0b0e11;border:1px solid #2b3139;border-radius:8px;padding:10px;min-height:72px;font:11px/1.5 ui-monospace,monospace}.med-banner{border:1px solid #6a541c;background:#211b09;color:#d8c47f;border-radius:10px;padding:11px 13px;margin-bottom:12px;font-size:12px}.med-kv{display:grid;grid-template-columns:150px 1fr;gap:7px;font-size:11px}.med-kv b{color:#eaecef}.med-kv span{color:#a7adb8;word-break:break-all}.med-divider{height:1px;background:#2b3139;margin:14px 0}@media(max-width:980px){.med-grid.three{grid-template-columns:1fr}}@media(max-width:800px){.med-grid{grid-template-columns:1fr}.med-kv{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
 <header class="topbar"><a class="logo" href="/">MasterlawEX</a><nav><a href="/">Trade</a><a href="/p2p.html">P2P</a><a href="/protocol.html">Protocol</a><a class="active" href="/mediation.html">Mediation</a></nav><button class="connect" data-connect data-wallet>Conectar wallet</button></header>
 <main class="med-wrap">
-  <div class="med-banner"><b>ARC TESTNET · P2P V1.4 · PRE-REAL-MONEY</b><br>Consola operativa para verificación, KYC, vínculo de wallet y preparación de mediación. No transmite arbitrajes; genera calldata para el multisig/smart-account de Masterlaw.</div>
+  <div class="med-banner"><b>ARC TESTNET · P2P V1.4 · PRE-REAL-MONEY</b><br>Consola operativa para verificación, KYC, vínculo de wallet, expediente y preparación de mediación. No transmite arbitrajes; genera paquetes reproducibles y calldata para revisión humana/multisig.</div>
 
   <div class="med-grid">
     <section class="med-card">
@@ -37,10 +37,63 @@
       </div>
       <pre id="tradeOutput" class="med-output">Escrow no verificado.</pre>
     </section>
+  </div>
 
+  <section class="med-card" style="margin-top:12px">
+    <div class="med-actions" style="justify-content:space-between;align-items:center">
+      <div><h2>Masterlaw P2P Case Workspace</h2><p>Expediente prepare-only alineado con la migración preparada. No guarda casos ni evidencia en Supabase.</p></div>
+      <div class="med-actions"><span id="adminState" class="med-status bad">ADMIN · LOCKED</span><span id="adminWriteState" class="med-status good">DB WRITES · OFF</span><button id="loadAdminState" class="med-btn">Validar rol admin</button></div>
+    </div>
+    <div class="med-divider"></div>
+    <div class="med-grid three">
+      <section class="med-card">
+        <h3>1 · Preparar caso</h3>
+        <div class="med-form">
+          <label>Nº caso<input id="adminCaseNumber" placeholder="P2P-2026-0001"></label>
+          <label>Trade externo<input id="adminExternalTrade" placeholder="UUID / referencia privada"></label>
+          <label>Wallet comprador<input id="adminBuyerWallet" placeholder="0x…"></label>
+          <label>Wallet vendedor<input id="adminSellerWallet" placeholder="0x…"></label>
+          <label>Monto USDC base units<input id="adminCryptoAmount" inputmode="numeric" placeholder="25000000"></label>
+          <label>Fiat<input id="adminFiat" value="CLP" maxlength="12"></label>
+          <label>Riesgo<select id="adminRiskLevel"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></label>
+          <label>Señales de riesgo · una por línea<textarea id="adminRiskSignals" placeholder="payment-name-mismatch&#10;velocity-review"></textarea></label>
+          <button id="prepareAdminCase" class="med-btn primary" disabled>Preparar case_hash</button>
+        </div>
+        <pre id="adminCaseOutput" class="med-output">Rol administrativo no validado.</pre>
+      </section>
+
+      <section class="med-card">
+        <h3>2 · Evidencia</h3>
+        <div class="med-form">
+          <label>Tipo<input id="adminEvidenceType" placeholder="BANK_TRANSFER_RECEIPT"></label>
+          <label>Referencia privada<input id="adminStorageRef" placeholder="private://masterlaw/p2p/…"></label>
+          <label>SHA-256 contenido<input id="adminEvidenceSha" placeholder="0x + 64 hex"></label>
+          <label>Visibilidad<select id="adminEvidenceVisibility"><option>CASE_TEAM</option><option>PARTIES</option><option>COMPLIANCE_ONLY</option></select></label>
+          <label>Nota<textarea id="adminEvidenceNote" placeholder="Sin PII on-chain"></textarea></label>
+          <button id="prepareAdminEvidence" class="med-btn primary" disabled>Preparar manifiesto</button>
+        </div>
+        <pre id="adminEvidenceOutput" class="med-output">Primero prepara un caso.</pre>
+      </section>
+
+      <section class="med-card">
+        <h3>3 · Resolución humana</h3>
+        <div class="med-form">
+          <label>Estado actual<select id="adminCurrentStatus"><option>ARBITRATION_PENDING</option><option>MEDIATION_PROPOSED</option><option>AGREEMENT_PENDING_SIGNATURES</option></select></label>
+          <label>Modo<select id="adminResolutionMode"><option>ARBITER_RELEASE_BUYER</option><option>ARBITER_REFUND_SELLER</option><option>MUTUAL_SPLIT_AGREEMENT</option></select></label>
+          <label>Código fundamento<input id="adminRationale" placeholder="PAYMENT_CONFIRMED"></label>
+          <label>Monto comprador en split · base units<input id="adminSplitAmount" inputmode="numeric" placeholder="Sólo acuerdo mutuo"></label>
+          <label class="med-check"><input id="adminHumanApprove" type="checkbox"> Confirmo revisión humana del expediente</label>
+          <button id="prepareAdminResolution" class="med-btn primary" disabled>Preparar resolution_hash</button>
+        </div>
+        <pre id="adminResolutionOutput" class="med-output">La resolución no se firma ni transmite desde el navegador.</pre>
+      </section>
+    </div>
+  </section>
+
+  <div class="med-grid" style="margin-top:12px">
     <section class="med-card">
       <h3>Congelar operación</h3>
-      <p>Genera <code>openDisputeByArbiter(tradeId, caseHash)</code>. El hash debe referenciar un expediente privado Masterlaw, nunca PII.</p>
+      <p>Genera <code>openDisputeByArbiter(tradeId, caseHash)</code>. El hash referencia el expediente privado Masterlaw; nunca contiene PII.</p>
       <div class="med-form">
         <label>Case hash bytes32<input id="caseHash" placeholder="0x + 64 hex"></label>
         <button id="prepareFreeze" class="med-btn primary">Preparar Safe TX · Freeze</button>
@@ -69,5 +122,6 @@
 <script src="/core.js"></script>
 <script src="/mediation-abi.js"></script>
 <script src="/mediation.js"></script>
+<script src="/mediation-admin.js"></script>
 </body>
 </html>
