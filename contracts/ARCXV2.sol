@@ -134,7 +134,9 @@ contract ARCXMarketFactory {
     modifier onlyOwner(){require(msg.sender==owner,"OWNER");_;}
     function transferOwnership(address n) external onlyOwner { require(n!=address(0),"ZERO"); emit OwnershipTransferred(owner,n); owner=n; }
     function createMarket(address token,string calldata uri) external returns(address pair){
-        require(token!=address(0)&&token!=usdc&&markets[token].pair==address(0),"MARKET");
+        require(token!=address(0)&&token!=usdc&&token.code.length>0&&markets[token].pair==address(0),"MARKET");
+        (bool ok,bytes memory d)=token.staticcall(abi.encodeWithSignature("decimals()"));
+        require(ok&&d.length>=32&&abi.decode(d,(uint8))==18,"DECIMALS");
         pair=address(new ARCXPair(usdc,token));
         markets[token]=Market(pair,msg.sender,false,true,uri); allTokens.push(token);
         emit MarketCreated(token,pair,msg.sender,uri);
@@ -149,7 +151,7 @@ contract ARCXRouter is ReentrancyGuard {
     ARCXMarketFactory public immutable factory;
     address public immutable usdc;
     constructor(address f){ factory=ARCXMarketFactory(f); usdc=factory.usdc(); }
-    function _pair(address token) internal view returns(address p){ (p,,,,)=factory.markets(token); require(p!=address(0),"NO_MARKET"); }
+    function _pair(address token) internal view returns(address p){ (address pair,,,bool active,)=factory.markets(token); require(pair!=address(0)&&active,"MARKET_INACTIVE"); return pair; }
     function buy(address token,uint256 amountIn,uint256 minOut) external nonReentrant returns(uint256 out){
         address p=_pair(token); usdc.transferFrom(msg.sender,address(this),amountIn); usdc.approve(p,0); usdc.approve(p,amountIn); out=ARCXPair(p).swapUSDCForToken(amountIn,minOut,msg.sender); usdc.approve(p,0);
     }
