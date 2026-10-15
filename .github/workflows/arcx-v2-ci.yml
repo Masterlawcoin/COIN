@@ -130,16 +130,24 @@ jobs:
           node --check scripts/deploy-p2p-testnet.js
           node --check scripts/deploy-p2p-v14-arc.js
           node --check scripts/p2p-v14-admin.js
+          node --check scripts/verify-production-live.js
           node <<'NODE'
           const fs = require('fs');
           const admin = fs.readFileSync('scripts/p2p-v14-admin.js', 'utf8');
+          const smoke = fs.readFileSync('scripts/verify-production-live.js', 'utf8');
           for (const forbidden of ['eth_sendTransaction','sendTransaction(','P2P_ARBITER_PRIVATE_KEY','new ethers.Wallet']) {
             if (admin.includes(forbidden)) throw new Error(`prepare-only admin tool contains forbidden signing/broadcast surface: ${forbidden}`);
           }
           for (const required of ['PREPARE_ONLY_MULTISIG_SAFE','openDisputeByArbiter','resolveDispute','safeTransaction']) {
             if (!admin.includes(required)) throw new Error(`admin mediation guard missing: ${required}`);
           }
-          console.log('P2P V1.4 PREPARE-ONLY ADMIN PASS');
+          for (const forbidden of ['create_deployment','eth_sendTransaction','.insert(','.update(','.upsert(','.delete(']) {
+            if (smoke.includes(forbidden)) throw new Error(`production smoke verifier contains forbidden mutation surface: ${forbidden}`);
+          }
+          for (const required of ['MASTERLAWEX_PRODUCTION_SMOKE_V1','deployment_triggered: false','supabase_touched: false','5042002','0x3600000000000000000000000000000000000000']) {
+            if (!smoke.includes(required)) throw new Error(`production smoke guard missing: ${required}`);
+          }
+          console.log('P2P V1.4 PREPARE-ONLY ADMIN + PRODUCTION SMOKE PASS');
           NODE
       - name: Compile Solidity
         run: npm run build
