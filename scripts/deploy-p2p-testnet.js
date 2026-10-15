@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { ethers } = require('ethers');
 
+const EXPECTED_VERSION = '1.3.0-testnet';
+const EXPECTED_ORDER_REF_DOMAIN = ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1'));
 const SUPPORTED_TESTNETS = new Map([
   [5042002n, { name: 'Arc Testnet', explorer: 'https://explorer.testnet.arc.io' }],
   [84532n, { name: 'Base Sepolia', explorer: 'https://sepolia.basescan.org' }]
@@ -64,6 +66,9 @@ async function main() {
   const artifact = artifacts.MasterlawEXP2PEscrow;
   if (!artifact?.abi || !artifact?.bytecode?.startsWith('0x')) throw new Error('MasterlawEXP2PEscrow artifact is missing or invalid');
   if (artifacts._meta?.schema !== 2) throw new Error('Artifact provenance metadata missing. Rebuild with the current compiler pipeline.');
+  if (!artifact.bytecodeSha256 || !artifacts._meta?.sourceHashes?.['contracts/MasterlawEXP2PEscrow.sol']) {
+    throw new Error('P2P artifact is missing source/bytecode attestations');
+  }
 
   const wallet = new ethers.Wallet(privateKey, provider);
   const deployer = await wallet.getAddress();
@@ -87,14 +92,29 @@ async function main() {
   const receipt = await deploymentTx.wait();
   const verifiedAsset = ethers.getAddress(await contract.asset());
   const verifiedArbiter = ethers.getAddress(await contract.arbiter());
+  const verifiedVersion = await contract.VERSION();
+  const verifiedDomain = await contract.ORDER_REF_DOMAIN();
   if (verifiedAsset !== asset || verifiedArbiter !== arbiter) throw new Error('Post-deploy constructor verification failed');
+  if (verifiedVersion !== EXPECTED_VERSION) throw new Error(`Unexpected escrow runtime version: ${verifiedVersion}`);
+  if (verifiedDomain !== EXPECTED_ORDER_REF_DOMAIN) throw new Error('Unexpected order-reference domain');
+
+  const probeExternalId = ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_DEPLOY_PROBE'));
+  const contractOrderRef = await contract.computeOrderRef(probeExternalId);
+  const localOrderRef = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ['bytes32', 'uint256', 'address', 'bytes32'],
+      [EXPECTED_ORDER_REF_DOMAIN, chainId, address, probeExternalId]
+    )
+  );
+  if (contractOrderRef !== localOrderRef) throw new Error('Post-deploy order-reference derivation mismatch');
 
   const onChainCode = await provider.getCode(address);
   if (onChainCode === '0x') throw new Error('Deployment receipt confirmed but contract code is empty');
 
   const record = {
-    schema: 1,
+    schema: 2,
     contract: 'MasterlawEXP2PEscrow',
+    version: verifiedVersion,
     network: target.name,
     chainId: chainId.toString(),
     address,
@@ -106,6 +126,7 @@ async function main() {
     assetDecimals: decimals,
     arbiter,
     arbiterType: arbiterCode === '0x' ? 'EOA_SANDBOX_OVERRIDE' : 'CONTRACT_OR_MULTISIG',
+    orderRefDomain: verifiedDomain,
     buildId: artifacts._meta.buildId,
     sourceHashes: artifacts._meta.sourceHashes,
     bytecodeSha256: artifact.bytecodeSha256
@@ -115,7 +136,7 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
   const outFile = path.join(outDir, `p2p-${chainId}.json`);
   fs.writeFileSync(outFile, JSON.stringify(record, null, 2) + '\n');
-  console.log(`Escrow deployed: ${address}`);
+  console.log(`Escrow ${verifiedVersion} deployed: ${address}`);
   console.log(`${target.explorer}/address/${address}`);
   console.log(`Deployment record: ${path.relative(process.cwd(), outFile)}`);
 }
