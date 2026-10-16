@@ -1,0 +1,64 @@
+name: P2P V1.5 Fee CI
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/MasterlawEXP2PEscrowV15.sol'
+      - 'test/p2p-v15-fee.test.js'
+      - 'scripts/compile.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/p2p-v15-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/MasterlawEXP2PEscrowV15.sol'
+      - 'test/p2p-v15-fee.test.js'
+      - 'scripts/compile.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/p2p-v15-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fee-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - run: npm ci --no-audit --no-fund
+      - name: Compile V1.5 artifact
+        run: npm run build
+      - name: Lock fee economics and ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'string public constant VERSION = "1.5.0-testnet"' contracts/MasterlawEXP2PEscrowV15.sol
+          grep -q 'uint256 public constant FEE_BPS = 100' contracts/MasterlawEXP2PEscrowV15.sol
+          grep -q 'amount + feeReserved' contracts/MasterlawEXP2PEscrowV15.sol
+          grep -q '_safeTransferExact(feeTreasury, feeAmount)' contracts/MasterlawEXP2PEscrowV15.sol
+          node <<'NODE'
+          const { ethers }=require('ethers');
+          const a=require('./build/artifacts.json');
+          const v=a.MasterlawEXP2PEscrowV15;
+          if(!v?.bytecodeSha256) throw new Error('V1.5 artifact missing');
+          const names=v.abi.filter(x=>x.type==='function').map(x=>x.name);
+          for(const required of ['FEE_BPS','BPS_DENOMINATOR','feeTreasury','quoteFee','quoteLockAmount','createTrade','release','resolveDispute']) {
+            if(!names.includes(required)) throw new Error(`missing ${required}`);
+          }
+          for(const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw']) {
+            if(names.includes(forbidden)) throw new Error(`forbidden ${forbidden}`);
+          }
+          for(const sig of ['FEE_BPS()','feeTreasury()','quoteFee(uint256)','quoteLockAmount(uint256)','createTrade(address,uint256,uint64,bytes32)','release(uint256)']) {
+            const expected=ethers.id(sig).slice(2,10);
+            if(v.methodIdentifiers?.[sig]!==expected) throw new Error(`selector mismatch ${sig}`);
+          }
+          console.log('V1.5 1% FEE ABI LOCK PASS');
+          NODE
+      - name: Run V1.5 fee adversarial suite
+        run: node test/p2p-v15-fee.test.js
