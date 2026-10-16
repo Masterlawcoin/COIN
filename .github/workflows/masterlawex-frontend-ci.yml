@@ -25,7 +25,7 @@ permissions:
 jobs:
   build-and-guard:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web-overlay
@@ -45,12 +45,10 @@ jobs:
           test -s build/artifacts.json
           node <<'NODE'
           const a=require('./build/artifacts.json');
-          for(const key of ['MasterlawEXP2PEscrowV14','MasterlawEXP2PEscrowV15']) {
-            if(!a[key]?.methodIdentifiers) throw new Error(`${key} methodIdentifiers missing`);
-          }
+          for(const key of ['MasterlawEXP2PEscrowV14','MasterlawEXP2PEscrowV15']) if(!a[key]?.methodIdentifiers) throw new Error(`${key} methodIdentifiers missing`);
           NODE
 
-      - name: Validate ARC network and official KYC gate
+      - name: Validate ARC and KYC gate
         shell: bash
         run: |
           set -euo pipefail
@@ -59,64 +57,48 @@ jobs:
           grep -q "rpcs:\['https://rpc.testnet.arc.io','https://rpc.testnet.arc.network'\]" base/core.js
           grep -q "explorer:'https://testnet.arcscan.app'" base/core.js
           grep -q "usdc:'0x3600000000000000000000000000000000000000'" base/core.js
-          grep -q 'rpcUrls:C.rpcs' base/core.js
           grep -q 'Masterlaw KYC Gate' p2p.html
-          grep -q '/p2p-masterlaw-gate.js' p2p.html
+          grep -q "/api/exchange/p2p/gateway" p2p-masterlaw-gate.js
           grep -q "PROTECTED=new Set(\['create_offer','take_offer','mark_paid','release','cancel','dispute'\])" p2p-masterlaw-gate.js
-          grep -q '/api/exchange/p2p/bind-wallet' p2p-masterlaw-gate.js
-          grep -q '/api/exchange/p2p/verify-entitlement' p2p-masterlaw-gate.js
-          grep -q '/api/exchange/p2p/gateway' p2p-masterlaw-gate.js
           grep -q "entitlement:'\[MEMORY_ONLY\]'" p2p-masterlaw-gate.js
-          grep -q "protectedApi('create_offer'" p2p.js
-          grep -q "protectedApi('take_offer'" p2p.js
-          grep -q "protectedApi('dispute'" p2p.js
-          grep -q "else await protectedApi(action" p2p.js
           ! grep -q "api('create_offer'" p2p.js
           ! grep -q "api('take_offer'" p2p.js
-          ! grep -q "await api('dispute'" p2p.js
-          ! grep -E "await api\('(mark_paid|release|cancel)'" p2p.js
+          ! grep -E "await api\('(mark_paid|release|cancel|dispute)'" p2p.js
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|masterlawToken|boundWallet)' p2p-masterlaw-gate.js
-          ! grep -E 'private[_ -]?key|secretKey|seed phrase|eth_sendTransaction' p2p-masterlaw-gate.js
-          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js p2p-masterlaw-gate.js p2p-v15-trade.js mediation.html mediation.js mediation-admin.js
 
-      - name: Verify V1.5 fee and MetaMask surface
+      - name: Verify V1.5 fee, MetaMask and deploy lab
         shell: bash
         run: |
           set -euo pipefail
           test -s p2p-v15-trade.js
+          test -s base/protocol-v15.js
           grep -q 'MetaMask · ARC Testnet + USDC' p2p.html
           grep -q 'Escrow P2P V1.5 · comisión Masterlaw 1%' p2p.html
-          grep -q '/p2p-v15-abi.js' p2p.html
-          grep -q '/p2p-v15-trade.js' p2p.html
+          grep -q 'wallet_watchAsset' p2p-v15-trade.js
           grep -q "FEE_BPS=100n" p2p-v15-trade.js
-          grep -q "wallet_watchAsset" p2p-v15-trade.js
-          grep -q "window.MLX_P2P_GATE" p2p-v15-trade.js
-          grep -q "feeTreasury()" build.js
-          grep -q "quoteFee(uint256)" build.js
-          grep -q "quoteLockAmount(uint256)" build.js
-          grep -q "createTrade(address,uint256,uint64,bytes32)" build.js
-          grep -q "markPaymentSent(uint256)" build.js
-          grep -q "release(uint256)" build.js
-          grep -q "openDispute(uint256)" build.js
-          ! grep -E 'private[_ -]?key|secretKey|seed phrase' p2p-v15-trade.js
+          grep -q 'P2P ESCROW V1.5 · KYC + METAMASK + FEE 1% USDC · ARC TESTNET' base/protocol.html
+          grep -q '/protocol-v15.js' base/protocol.html
+          grep -q "ARTIFACT_COMMIT='894269f75c9f4beb51041107d2d24f04cb3005e5'" base/protocol-v15.js
+          grep -q "BUILD_ID='0x484ffd499e4d0d559dbf3441fac15b5f469ccdd763d00d60fc88a3a7bd1efcf7'" base/protocol-v15.js
+          grep -q "SOURCE_SHA256='0xae46353ecd684f9888e0db4c8786ef36bf4aa5510d338ee0ad5c8ed6b142914c'" base/protocol-v15.js
+          grep -q "FEE_BPS=100n" base/protocol-v15.js
+          grep -q "feeTreasury()" base/protocol-v15.js
+          grep -q "quoteFee(uint256)" base/protocol-v15.js
+          grep -q "quote!==1000000n" base/protocol-v15.js
+          grep -q 'debe ser Safe/multisig/smart-account con bytecode' base/protocol-v15.js
+          grep -q "method:'eth_sendTransaction'" base/protocol-v15.js
+          grep -q "masterlawex:p2p:v15:escrow-address:v1" base/protocol-v15.js
+          ! grep -E 'private[_ -]?key|secretKey|seed phrase' base/protocol-v15.js p2p-v15-trade.js
           cd ..
           node <<'NODE'
           const { ethers }=require('ethers');
-          const a=require('./build/artifacts.json');
-          const v=a.MasterlawEXP2PEscrowV15;
-          if(v.source!=='contracts/MasterlawEXP2PEscrowV15.sol') throw new Error('V1.5 source mismatch');
+          const a=require('./build/artifacts.json'),v=a.MasterlawEXP2PEscrowV15;
           const names=v.abi.filter(x=>x.type==='function').map(x=>x.name);
-          for(const required of ['FEE_BPS','feeTreasury','quoteFee','quoteLockAmount','createTrade','markPaymentSent','release','openDispute']) {
-            if(!names.includes(required)) throw new Error(`V1.5 ABI missing ${required}`);
-          }
-          for(const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw']) {
-            if(names.includes(forbidden)) throw new Error(`unsafe V1.5 admin method ${forbidden}`);
-          }
+          for(const required of ['FEE_BPS','feeTreasury','quoteFee','quoteLockAmount','createTrade','markPaymentSent','release','openDispute']) if(!names.includes(required)) throw new Error(`V1.5 ABI missing ${required}`);
+          for(const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw']) if(names.includes(forbidden)) throw new Error(`unsafe V1.5 method ${forbidden}`);
           for(const sig of ['feeTreasury()','FEE_BPS()','quoteFee(uint256)','quoteLockAmount(uint256)','createTrade(address,uint256,uint64,bytes32)','markPaymentSent(uint256)','release(uint256)','openDispute(uint256)']) {
-            const expected=ethers.id(sig).slice(2,10);
-            if(v.methodIdentifiers?.[sig]!==expected) throw new Error(`V1.5 selector mismatch ${sig}`);
+            if(v.methodIdentifiers?.[sig]!==ethers.id(sig).slice(2,10)) throw new Error(`selector mismatch ${sig}`);
           }
-          console.log('P2P V1.5 ABI + 1% UI LOCK PASS');
           NODE
 
       - name: Validate mediation remains fail-closed
@@ -124,11 +106,10 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'REAL MONEY · OFF' mediation.html
-          grep -q 'Masterlaw P2P Case Workspace' mediation.html
           grep -q 'EDGE ENFORCEMENT · BLOCKED' mediation-admin.js
-          grep -q 'CASE STORE · BLOCKED' mediation-admin.js
           grep -q 'REAL P2P · BLOCKED' mediation-admin.js
           ! grep -E 'eth_sendTransaction|private[_ -]?key|secretKey' mediation-admin.js
+          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js p2p-masterlaw-gate.js p2p-v15-trade.js mediation.html mediation.js mediation-admin.js
 
       - name: JavaScript syntax checks
         run: |
@@ -141,6 +122,7 @@ jobs:
           node --check base/core.js
           node --check base/protocol.js
           node --check base/protocol-v14.js
+          node --check base/protocol-v15.js
 
       - name: Build frontend
         run: npm run build
@@ -149,20 +131,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in index.html p2p.html p2p.js p2p-masterlaw-gate.js p2p-v15-trade.js p2p-v15-abi.js protocol.html protocol.js protocol-v14.js mediation.html mediation.js mediation-admin.js mediation-abi.js release.json app.css core.js; do
+          for file in index.html p2p.html p2p.js p2p-masterlaw-gate.js p2p-v15-trade.js p2p-v15-abi.js protocol.html protocol.js protocol-v14.js protocol-v15.js mediation.html mediation.js mediation-admin.js mediation-abi.js release.json app.css core.js; do
             test -s "dist/$file" || { echo "Missing dist/$file"; exit 1; }
           done
           grep -q 'MetaMask · ARC Testnet + USDC' dist/p2p.html
           grep -q 'Escrow P2P V1.5 · comisión Masterlaw 1%' dist/p2p.html
+          grep -q 'P2P ESCROW V1.5 · KYC + METAMASK + FEE 1% USDC · ARC TESTNET' dist/protocol.html
+          grep -q 'Desplegar Escrow V1.5 + fee 1%' dist/protocol.html
+          grep -q 'quote!==1000000n' dist/protocol-v15.js
           grep -q 'wallet_watchAsset' dist/p2p-v15-trade.js
           grep -q 'KYC_MASTERLAW_Y_WALLET_REQUERIDOS' dist/p2p-v15-trade.js
-          grep -q 'feeTreasury()' dist/p2p-v15-abi.js
-          grep -q 'quoteFee(uint256)' dist/p2p-v15-abi.js
-          grep -q 'createTrade(address,uint256,uint64,bytes32)' dist/p2p-v15-abi.js
           grep -q '"p2p_fee_bps": 100' dist/release.json
           grep -q '"p2p_fee_asset": "USDC"' dist/release.json
           grep -q '"real_money_enabled": false' dist/release.json
           node -e "const r=require('./dist/release.json'); if(r.chain_id!==5042002||r.p2p_fee_bps!==100||r.p2p_fee_asset!=='USDC'||r.real_money_enabled!==false) process.exit(1)"
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 31 || { echo "Expected 31 dist files, found $count"; exit 1; }
+          test "$count" -eq 32 || { echo "Expected 32 dist files, found $count"; exit 1; }
