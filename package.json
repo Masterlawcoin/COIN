@@ -1,13 +1,13 @@
 {
   "name": "masterlawex-protocol",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "engines": {
     "node": "24.x"
   },
   "scripts": {
     "build": "node scripts/compile.js",
-    "test": "node test/core.test.js && node test/p2p.test.js && node test/p2p-v14.test.js",
+    "test": "node test/core.test.js && node test/p2p.test.js && node test/p2p-v14.test.js && node test/p2p-v15-fee.test.js",
     "deploy:p2p:arc": "node scripts/deploy-p2p-testnet.js",
     "deploy:p2p:v14:arc": "node scripts/deploy-p2p-v14-arc.js",
     "p2p:v14:admin": "node scripts/p2p-v14-admin.js"
