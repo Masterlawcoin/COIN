@@ -117,19 +117,23 @@ function eq(a,b,label){if(a!==b)throw Error(`${label}: expected ${b}, got ${a}`)
   eq(await usdc.balanceOf(treasuryAddr),treasuryBefore6,'zero buyer amount has zero fee');
   eq((await usdc.balanceOf(sellerAddr))-sellerBefore6,lock,'zero buyer amount refunds full lock');
 
-  // Fee-on-transfer tokens are rejected on funding and settlement remains atomic.
+  // Fee-on-transfer tokens are rejected on funding and failed settlement remains fully atomic.
   await (await usdc.setFeeBps(100)).wait();
   const nextBefore=await escrow.nextTradeId();
   await mustRevert(()=>escrow.createTrade(buyerAddr,amount,900,ext('fee-on-transfer')),'fee-on-transfer funding');
   eq(await escrow.nextTradeId(),nextBefore,'failed funding rolls back id');
   await (await usdc.setFeeBps(0)).wait();
 
-  const t7=await create();await (await escrow.connect(buyer).markPaymentSent(t7)).wait();
+  const t7=await create();
+  await (await escrow.connect(buyer).markPaymentSent(t7)).wait();
+  const escrowBefore7=await usdc.balanceOf(escrowAddr),buyerBefore7=await usdc.balanceOf(buyerAddr),treasuryBefore7=await usdc.balanceOf(treasuryAddr);
   await (await usdc.setFeeBps(100)).wait();
   await mustRevert(()=>escrow.release(t7),'fee-on-transfer settlement');
   eq((await escrow.trades(t7)).state,2n,'failed settlement rolls state back');
+  eq(await usdc.balanceOf(escrowAddr),escrowBefore7,'failed settlement keeps escrow reserve');
+  eq(await usdc.balanceOf(buyerAddr),buyerBefore7,'failed settlement pays buyer zero');
+  eq(await usdc.balanceOf(treasuryAddr),treasuryBefore7,'failed settlement pays treasury zero');
   await (await usdc.setFeeBps(0)).wait();
-  await (await escrow.release(t7)).wait();
 
   await mustRevert(()=>escrow.connect(outsider).setNewTradesPaused(true),'only arbiter pause');
   console.log('P2P V1.5 1% FEE TEST PASS');
