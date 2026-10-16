@@ -1,6 +1,6 @@
 {
   "name": "masterlawex-protocol",
-  "version": "0.3.2",
+  "version": "0.3.1",
   "private": true,
   "engines": {
     "node": "24.x"
