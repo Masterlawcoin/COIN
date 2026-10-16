@@ -47,7 +47,7 @@ jobs:
           set -euo pipefail
           files=(
             app.css core.js earn.html earn.js identity.html index.html
-            list.html list.js portfolio.html portfolio.js protocol.html protocol.js
+            list.html list.js portfolio.html portfolio.js protocol.html protocol.js protocol-v14.js
             registry.js startup.html startup.js trade.js
           )
           for file in "${files[@]}"; do
@@ -78,6 +78,15 @@ jobs:
           grep -q "trade:'0x1e6c598e'" p2p.js
           grep -q "byRef:'0x0bb784d8'" p2p.js
           grep -q 'ARC TESTNET ONLY' base/protocol.html
+          grep -q 'P2P ESCROW V1.4 · MASTERLAW MEDIATION · ARC TESTNET ONLY' base/protocol.html
+          grep -q '/protocol-v14.js' base/protocol.html
+          grep -q "V14_ARTIFACT_COMMIT='fd389c42b556b777e62323f18f0c4d153deb6dff'" base/protocol-v14.js
+          grep -q "V14_BUILD_ID='0x8fe3cc299c7910be4dc7f680dd4f1f497d19967785ae064ff47f3178f73c11d2'" base/protocol-v14.js
+          grep -q "V14_SOURCE_SHA256='0x63278c19167b96373a3d1428fd24a9b550abd6841d93de3881d4aae73d10cecd'" base/protocol-v14.js
+          grep -q 'eth_estimateGas' base/protocol-v14.js
+          grep -q "method:'eth_sendTransaction'" base/protocol-v14.js
+          grep -q "eth_getCode" base/protocol-v14.js
+          grep -q 'V1.4 exige contrato/multisig, no EOA' base/protocol-v14.js
           grep -q "MASTERLAW_API='https://masterlaw-api.vercel.app'" mediation.js
           grep -q "P2P_SESSION_KEY='masterlawex:p2p:session:v1'" mediation.js
           grep -q '/api/exchange/p2p/bind-wallet' mediation.js
@@ -113,7 +122,38 @@ jobs:
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' mediation.js
           ! grep -E 'localStorage|sessionStorage' mediation-admin.js
           ! grep -E 'eth_sendTransaction|private[_ -]?key|secretKey' mediation-admin.js
+          ! grep -E 'private[_ -]?key|secretKey|seed phrase' base/protocol-v14.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js mediation.html mediation.js mediation-admin.js
+      - name: Verify V1.4 domains and browser ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ..
+          node <<'NODE'
+          const fs=require('fs');
+          const { ethers }=require('ethers');
+          const js=fs.readFileSync('web-overlay/base/protocol-v14.js','utf8');
+          const a=require('./build/artifacts.json');
+          const p=a.MasterlawEXP2PEscrowV14;
+          const order=ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_ORDER_REF_V1'));
+          const split=ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_MUTUAL_SPLIT_V1'));
+          if(!js.includes(`ORDER_DOMAIN='${order}'`))throw Error(`V1.4 ORDER_DOMAIN mismatch: ${order}`);
+          if(!js.includes(`SPLIT_DOMAIN='${split}'`))throw Error(`V1.4 SPLIT_DOMAIN mismatch: ${split}`);
+          const required=[
+            'VERSION()','asset()','arbiter()','ORDER_REF_DOMAIN()','SPLIT_DOMAIN()',
+            'computeOrderRef(bytes32)','computeSplitProposalHash(uint256,uint256,bytes32)',
+            'openDisputeByArbiter(uint256,bytes32)','resolveDispute(uint256,bool,bytes32)',
+            'proposeMutualSplit(uint256,uint256,bytes32)','approveMutualSplit(uint256,uint256,bytes32)'
+          ];
+          for(const sig of required){
+            const expected=ethers.id(sig).slice(2,10);
+            if(p.methodIdentifiers?.[sig]!==expected)throw Error(`V1.4 artifact selector mismatch ${sig}`);
+            if(!js.includes(`'${sig}'`))throw Error(`V1.4 browser does not require ${sig}`);
+          }
+          const names=p.abi.filter(x=>x.type==='function').map(x=>x.name);
+          for(const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw'])if(names.includes(forbidden))throw Error(`unsafe V1.4 method ${forbidden}`);
+          console.log('V1.4 BROWSER DOMAIN + ABI PASS',{order,split});
+          NODE
       - name: JavaScript syntax checks
         run: |
           node --check build.js
@@ -124,6 +164,7 @@ jobs:
           node --check mediation-admin.js
           node --check base/core.js
           node --check base/protocol.js
+          node --check base/protocol-v14.js
       - name: Build frontend
         run: npm run build
       - name: Validate output
@@ -136,6 +177,7 @@ jobs:
           test -s dist/agents.html
           test -s dist/protocol.html
           test -s dist/protocol.js
+          test -s dist/protocol-v14.js
           test -s dist/mediation.html
           test -s dist/mediation.js
           test -s dist/mediation-admin.js
@@ -154,6 +196,13 @@ jobs:
           grep -q 'reverseLookupMatches:true' dist/p2p.js
           grep -q 'P2P ESCROW V1.3 · ARC TESTNET ONLY' dist/protocol.html
           grep -q 'Desplegar Escrow V1.3 en ARC' dist/protocol.html
+          grep -q 'P2P ESCROW V1.4 · MASTERLAW MEDIATION · ARC TESTNET ONLY' dist/protocol.html
+          grep -q 'Desplegar Escrow V1.4 en ARC' dist/protocol.html
+          grep -q '/protocol-v14.js' dist/protocol.html
+          grep -q "V14_VERSION='1.4.0-testnet'" dist/protocol-v14.js
+          grep -q "SPLIT_DOMAIN='0xbaa52ef9e8b423282f954f0253b95e496fdcc34017570f67b7365c0a5efa5f9d'" dist/protocol-v14.js
+          grep -q 'eth_estimateGas' dist/protocol-v14.js
+          grep -q "method:'eth_sendTransaction'" dist/protocol-v14.js
           grep -q 'P2P V1.4 · PRE-REAL-MONEY' dist/mediation.html
           grep -q 'Masterlaw KYC + Wallet Gate' dist/mediation.html
           grep -q 'Vincular wallet ARC' dist/mediation.html
@@ -189,4 +238,4 @@ jobs:
           grep -q 'ensureChain,wait,send' dist/core.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 27 || { echo "Expected 27 dist files, found $count"; exit 1; }
+          test "$count" -eq 28 || { echo "Expected 28 dist files, found $count"; exit 1; }
