@@ -1,0 +1,28 @@
+{
+  "id": "/p2p.html",
+  "name": "MasterlawEX",
+  "short_name": "MasterlawEX",
+  "description": "Exchange P2P USDC sobre ARC Testnet con login Masterlaw, KYC y MetaMask.",
+  "lang": "es",
+  "start_url": "/p2p.html?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "portrait-primary",
+  "background_color": "#0b0e11",
+  "theme_color": "#0b0e11",
+  "categories": ["finance", "business", "productivity"],
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "P2P USDC", "short_name": "P2P", "url": "/p2p.html", "icons": [{"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml"}] },
+    { "name": "Iniciar sesión", "short_name": "Login", "url": "/login.html?return=%2Fp2p.html", "icons": [{"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml"}] },
+    { "name": "Trade", "short_name": "Trade", "url": "/", "icons": [{"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml"}] }
+  ]
+}
