@@ -15,7 +15,7 @@ const strip=x=>String(x||'').replace(/^0x/,'');
 const word=v=>BigInt(v).toString(16).padStart(64,'0');
 const validAddress=v=>/^0x[a-fA-F0-9]{40}$/.test(String(v||''));
 const same=(a,b)=>String(a||'').toLowerCase()===String(b||'').toLowerCase();
-const bytes32=v=>/^0x[0-9a-fA-F]{64}$/.test(String(v||''));
+const isBytes32=v=>/^0x[0-9a-fA-F]{64}$/.test(String(v||''));
 function selector(sig){const raw=ABI?.methods?.[sig];if(!/^[0-9a-fA-F]{8}$/.test(String(raw||'')))throw Error(`ABI V1.4 sin selector ${sig}`);return '0x'+raw.toLowerCase()}
 function decodeAddress(data){const h=strip(data);if(h.length<64)throw Error('ABI address inválido');return '0x'+h.slice(24,64)}
 function decodeUint(data){const h=strip(data);if(h.length<64)throw Error('ABI uint inválido');return BigInt('0x'+h.slice(0,64))}
@@ -24,9 +24,7 @@ function decodeBytes32(data){const h=strip(data);if(h.length<64)throw Error('ABI
 function decodeString(data){const h=strip(data);if(h.length<128)throw Error('ABI string inválido');const off=Number(BigInt('0x'+h.slice(0,64)))*2;if(!Number.isSafeInteger(off)||off+64>h.length)throw Error('ABI string offset inválido');const len=Number(BigInt('0x'+h.slice(off,off+64))),start=off+64,end=start+len*2;if(!Number.isSafeInteger(len)||end>h.length)throw Error('ABI string largo inválido');const bytes=new Uint8Array((h.slice(start,end).match(/.{1,2}/g)||[]).map(x=>parseInt(x,16)));return new TextDecoder().decode(bytes)}
 function decodeTrade(data){const h=strip(data);if(h.length<64*7)throw Error('ABI trades incompleto');const w=Array.from({length:7},(_,i)=>h.slice(i*64,(i+1)*64));return{seller:'0x'+w[0].slice(24),buyer:'0x'+w[1].slice(24),amount:BigInt('0x'+w[2]),createdAt:BigInt('0x'+w[3]),deadline:BigInt('0x'+w[4]),state:Number(BigInt('0x'+w[5])),orderRef:'0x'+w[6].toLowerCase()}}
 function readRecord(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')||{}}catch{throw Error('registro V1.4 local corrupto')}}
-function identityOk(d){
-  return !!d&&d.schema===1&&d.network==='Arc Testnet'&&String(d.chainId||'').toLowerCase()===A.C.chain&&same(d.asset,A.C.usdc)&&validAddress(d.arbiter)&&validAddress(d.escrow)&&d.artifactCommit===ARTIFACT_COMMIT&&d.buildId===BUILD_ID&&d.sourceSha256===SOURCE_SHA256&&d.expectedVersion===VERSION&&String(d.expectedOrderDomain||'').toLowerCase()===ORDER_DOMAIN&&String(d.expectedSplitDomain||'').toLowerCase()===SPLIT_DOMAIN&&d.verifiedVersion===VERSION&&String(d.verifiedOrderDomain||'').toLowerCase()===ORDER_DOMAIN&&String(d.verifiedSplitDomain||'').toLowerCase()===SPLIT_DOMAIN&&same(d.verifiedAsset,A.C.usdc)&&same(d.verifiedArbiter,d.arbiter);
-}
+function identityOk(d){return !!d&&d.schema===1&&d.network==='Arc Testnet'&&String(d.chainId||'').toLowerCase()===A.C.chain&&same(d.asset,A.C.usdc)&&validAddress(d.arbiter)&&validAddress(d.escrow)&&d.artifactCommit===ARTIFACT_COMMIT&&d.buildId===BUILD_ID&&d.sourceSha256===SOURCE_SHA256&&d.expectedVersion===VERSION&&String(d.expectedOrderDomain||'').toLowerCase()===ORDER_DOMAIN&&String(d.expectedSplitDomain||'').toLowerCase()===SPLIT_DOMAIN&&d.verifiedVersion===VERSION&&String(d.verifiedOrderDomain||'').toLowerCase()===ORDER_DOMAIN&&String(d.verifiedSplitDomain||'').toLowerCase()===SPLIT_DOMAIN&&same(d.verifiedAsset,A.C.usdc)&&same(d.verifiedArbiter,d.arbiter)}
 function setStatus(text,kind){const el=$('v14StatusKpi');if(el){el.textContent=text;el.className=kind||''}}
 function predeploy(){verified=null;setStatus('V1.4 · PRE-DEPLOY','warn');$('v14OfficialTitle').textContent='V1.4 · PENDIENTE';$('v14OfficialText').textContent='No existe un escrow V1.4 verificado en el registro local de este navegador.';$('v14OfficialMode').textContent='MASTERLAW MEDIATION · PRE-DEPLOY'}
 function blocked(msg){verified=null;setStatus('V1.4 · BLOCKED','bad');$('v14OfficialTitle').textContent='V1.4 · FAIL CLOSED';$('v14OfficialText').textContent='No verificable: '+String(msg||'registro/runtime inválido');$('v14OfficialMode').textContent='MASTERLAW MEDIATION · BLOCKED'}
@@ -37,13 +35,7 @@ async function verifyRuntime(){
   if(!identityOk(d))throw Error('registro local V1.4 no coincide con identidad canónica');
   const chain=String(await A.rpc('eth_chainId')).toLowerCase();if(chain!==A.C.chain)throw Error('RPC fuera de Arc Testnet 5042002');
   const code=await A.rpc('eth_getCode',[d.escrow,'latest']);if(!code||code==='0x')throw Error('escrow V1.4 sin bytecode');
-  const [assetRaw,arbRaw,verRaw,orderRaw,splitRaw]=await Promise.all([
-    A.call(d.escrow,selector('asset()')),
-    A.call(d.escrow,selector('arbiter()')),
-    A.call(d.escrow,selector('VERSION()')),
-    A.call(d.escrow,selector('ORDER_REF_DOMAIN()')),
-    A.call(d.escrow,selector('SPLIT_DOMAIN()'))
-  ]);
+  const [assetRaw,arbRaw,verRaw,orderRaw,splitRaw]=await Promise.all([A.call(d.escrow,selector('asset()')),A.call(d.escrow,selector('arbiter()')),A.call(d.escrow,selector('VERSION()')),A.call(d.escrow,selector('ORDER_REF_DOMAIN()')),A.call(d.escrow,selector('SPLIT_DOMAIN()'))]);
   const asset=decodeAddress(assetRaw),arbiter=decodeAddress(arbRaw),version=decodeString(verRaw),order=decodeBytes32(orderRaw),split=decodeBytes32(splitRaw);
   if(!same(asset,A.C.usdc))throw Error('asset() no es USDC ARC');
   if(!same(arbiter,d.arbiter))throw Error('arbiter() no coincide con el Safe/multisig registrado');
@@ -63,27 +55,23 @@ async function inspect(){
   try{
     const runtime=verified||await verifyRuntime();if(!runtime)throw Error('ESCROW_V1_4_NOT_VERIFIED');
     const raw=$('v14TradeId').value.trim();if(!/^\d+$/.test(raw)||BigInt(raw)<=0n)throw Error('Trade ID debe ser entero mayor que 0');const id=BigInt(raw);
-    const [tradeRaw,caseRaw,resRaw,proposalRaw,buyerAmtRaw,sellerOkRaw,buyerOkRaw,reverseRaw]=await Promise.all([
-      A.call(runtime.escrow,selector('trades(uint256)')+word(id)),
+    const tradeRaw=await A.call(runtime.escrow,selector('trades(uint256)')+word(id));
+    const t=decodeTrade(tradeRaw);if(t.state===0)throw Error(`tradeId ${id} no existe`);
+    const [caseRaw,resRaw,proposalRaw,buyerAmtRaw,sellerOkRaw,buyerOkRaw,reverseRaw]=await Promise.all([
       A.call(runtime.escrow,selector('caseHashByTrade(uint256)')+word(id)),
       A.call(runtime.escrow,selector('resolutionHashByTrade(uint256)')+word(id)),
       A.call(runtime.escrow,selector('splitProposalHashByTrade(uint256)')+word(id)),
       A.call(runtime.escrow,selector('splitBuyerAmountByTrade(uint256)')+word(id)),
       A.call(runtime.escrow,selector('splitSellerApproved(uint256)')+word(id)),
       A.call(runtime.escrow,selector('splitBuyerApproved(uint256)')+word(id)),
-      A.call(runtime.escrow,selector('tradeIdByReference(bytes32)')+strip((()=>{const t=decodeTrade(tradeRaw);return t.orderRef})()))
+      A.call(runtime.escrow,selector('tradeIdByReference(bytes32)')+strip(t.orderRef))
     ]);
-    const t=decodeTrade(tradeRaw);if(t.state===0)throw Error(`tradeId ${id} no existe`);
     const reverse=decodeUint(reverseRaw);if(reverse!==id)throw Error(`orderRef reverse lookup=${reverse}, esperado ${id}`);
     const caseHash=decodeBytes32(caseRaw),resolutionHash=decodeBytes32(resRaw),proposalHash=decodeBytes32(proposalRaw);
-    out.textContent=JSON.stringify({network:'Arc Testnet',chainId:5042002,escrow:runtime.escrow,version:runtime.version,tradeId:id.toString(),state:STATES[t.state]||`Unknown(${t.state})`,seller:t.seller,buyer:t.buyer,amountUSDC:A.fmt(t.amount,6,6),amountBaseUnits:t.amount.toString(),createdAt:new Date(Number(t.createdAt)*1000).toISOString(),deadline:new Date(Number(t.deadline)*1000).toISOString(),orderRef:t.orderRef,reverseLookup:reverse.toString(),reverseLookupMatches:true,caseHash:bytes32(caseHash)&&caseHash!==ZERO32?caseHash:null,resolutionHash:bytes32(resolutionHash)&&resolutionHash!==ZERO32?resolutionHash:null,mutualSplit:{proposalHash:bytes32(proposalHash)&&proposalHash!==ZERO32?proposalHash:null,buyerAmountBaseUnits:decodeUint(buyerAmtRaw).toString(),sellerApproved:decodeBool(sellerOkRaw),buyerApproved:decodeBool(buyerOkRaw)},readOnly:true,mediation:'MASTERLAW_V1_4'},null,2);
+    out.textContent=JSON.stringify({network:'Arc Testnet',chainId:5042002,escrow:runtime.escrow,version:runtime.version,tradeId:id.toString(),state:STATES[t.state]||`Unknown(${t.state})`,seller:t.seller,buyer:t.buyer,amountUSDC:A.fmt(t.amount,6,6),amountBaseUnits:t.amount.toString(),createdAt:new Date(Number(t.createdAt)*1000).toISOString(),deadline:new Date(Number(t.deadline)*1000).toISOString(),orderRef:t.orderRef,reverseLookup:reverse.toString(),reverseLookupMatches:true,caseHash:isBytes32(caseHash)&&caseHash!==ZERO32?caseHash:null,resolutionHash:isBytes32(resolutionHash)&&resolutionHash!==ZERO32?resolutionHash:null,mutualSplit:{proposalHash:isBytes32(proposalHash)&&proposalHash!==ZERO32?proposalHash:null,buyerAmountBaseUnits:decodeUint(buyerAmtRaw).toString(),sellerApproved:decodeBool(sellerOkRaw),buyerApproved:decodeBool(buyerOkRaw)},readOnly:true,mediation:'MASTERLAW_V1_4'},null,2);
   }catch(e){out.textContent='FAIL CLOSED · '+String(e.message||e)}
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
-  if(!$('v14OfficialCard'))return;
-  $('refreshV14Status').onclick=refresh;$('inspectTradeV14').onclick=inspect;$('v14TradeId').onkeydown=e=>{if(e.key==='Enter')inspect()};
-  refresh();setInterval(refresh,30000);
-});
+document.addEventListener('DOMContentLoaded',()=>{if(!$('v14OfficialCard'))return;$('refreshV14Status').onclick=refresh;$('inspectTradeV14').onclick=inspect;$('v14TradeId').onkeydown=e=>{if(e.key==='Enter')inspect()};refresh();setInterval(refresh,30000)});
 window.MLX_P2P_V14_STATUS={refresh,verifyRuntime,get verified(){return verified}};
 })();
