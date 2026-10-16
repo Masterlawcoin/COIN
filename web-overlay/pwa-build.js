@@ -7,6 +7,7 @@ for(const name of htmlFiles){
   const file=path.join(OUT,name);let s=fs.readFileSync(file,'utf8');
   if(!s.includes('rel="manifest"'))s=s.replace('</head>','<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/app-icon.svg" type="image/svg+xml"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="MasterlawEX"><meta name="mobile-web-app-capable" content="yes"></head>');
   if(s.includes('src="/core.js"')&&!s.includes('src="/metamask-connect.js"'))s=s.replace('<script src="/core.js"></script>','<script src="/metamask-connect.js"></script><script src="/core.js"></script>');
+  if(name==='p2p.html')s=s.replace(/<label[^>]*>Token sesión Masterlaw<input id="p2pMasterlawToken"[^>]*><\/label>/,'<input id="p2pMasterlawToken" type="hidden" autocomplete="off" aria-hidden="true">');
   if(!s.includes('src="/auth.js"'))s=s.replace('</body>','<script src="/auth.js"></script></body>');
   fs.writeFileSync(file,s);
 }
