@@ -2,7 +2,7 @@
 const A=window.ARCX_API,$=A.$;
 const MASTERLAW_API='https://masterlaw-api.vercel.app';
 const ARC_CHAIN='0x4cef52',ARC_USDC='0x3600000000000000000000000000000000000000';
-let adminReady=false,preparedCaseHash='',evidenceManifestHashes=[],lastReadiness=null,releaseMeta=null;
+let adminReady=false,preparedCaseHash='',evidenceManifestHashes=[],lastReadiness=null,releaseMeta=null,controlPlaneMeta=null,controlPlanePolicy=null;
 
 function safeJson(v){return JSON.stringify(v,null,2)}
 function validBytes32(v){return /^0x[0-9a-fA-F]{64}$/.test(String(v||''))}
@@ -33,36 +33,55 @@ function escrowReady(){
   return !!snap&&Number(snap.chainId)===5042002&&snap.readOnly===true&&snap.version==='1.4.0-testnet'&&same(snap.asset,ARC_USDC)&&/^0x[0-9a-fA-F]{40}$/.test(String(snap.escrow||''));
 }
 function validRelease(v){return !!v&&v.schema==='MASTERLAWEX_RELEASE_V1'&&Number(v.chain_id)===5042002&&v.network==='Arc Testnet'&&same(v.asset,ARC_USDC)&&v.real_money_enabled===false}
+function validControlPlane(h,p){
+  return !!h&&!!p&&h.ok===true&&p.ok===true&&h.service==='MASTERLAW_P2P_CONTROL_PLANE'&&Number(h.chain_id)===5042002&&Number(p.chain?.chain_id)===5042002&&h.entitlement_verifier==='STATELESS_PLUS_CURRENT_KYC_RECHECK'&&p.wallet_binding?.server_verification==='/api/exchange/p2p/verify-entitlement'&&h.writes_enabled===false&&h.real_money_enabled===false&&p.database_mutation===false&&p.real_money_enabled===false;
+}
 async function refreshReleaseMeta(){
   try{const r=await fetch('/release.json',{cache:'no-store',headers:{accept:'application/json'}});const j=await r.json();if(!r.ok||!validRelease(j))throw Error('INVALID_RELEASE_MANIFEST');releaseMeta=j}catch{releaseMeta=null}
   renderReadiness();
 }
+async function refreshControlPlaneMeta(){
+  try{
+    const [hr,pr]=await Promise.all([
+      fetch(MASTERLAW_API+'/api/exchange/p2p/health',{cache:'no-store',headers:{accept:'application/json'}}),
+      fetch(MASTERLAW_API+'/api/exchange/p2p/policy',{cache:'no-store',headers:{accept:'application/json'}})
+    ]);
+    const [h,p]=await Promise.all([hr.json(),pr.json()]);
+    if(!hr.ok||!pr.ok||!validControlPlane(h,p))throw Error('INVALID_CONTROL_PLANE_VERIFIER');
+    controlPlaneMeta=h;controlPlanePolicy=p;
+  }catch{controlPlaneMeta=null;controlPlanePolicy=null}
+  renderReadiness();
+}
+async function refreshReadinessSources(){await Promise.all([refreshReleaseMeta(),refreshControlPlaneMeta()]);renderReadiness()}
 function buildReadinessUI(){
   if($('activationReadiness'))return;
   const banner=document.querySelector('.med-banner');if(!banner)return;
   const section=document.createElement('section');section.id='activationReadiness';section.className='med-card';section.style.marginBottom='12px';
-  section.innerHTML=`<div class="med-actions" style="justify-content:space-between;align-items:center"><div><h2>P2P Activation Readiness</h2><p>Chequeo fail-closed. No activa fondos: sólo separa lo listo de lo todavía bloqueado.</p></div><div class="med-actions"><span id="readinessOverall" class="med-status bad">REAL P2P · BLOCKED</span><button id="refreshReadiness" class="med-btn">Actualizar</button><button id="copyReadiness" class="med-btn">Copiar reporte</button></div></div><div class="med-divider"></div><div class="med-actions"><span id="readyFrontend" class="med-status good">FRONTEND · LOADED</span><span id="readyRelease" class="med-status bad">RELEASE · UNKNOWN</span><span id="readyArc" class="med-status good">ARC · LOCKED</span><span id="readyApi" class="med-status bad">CONTROL PLANE · OFF</span><span id="readyKyc" class="med-status bad">KYC · BLOCKED</span><span id="readyWallet" class="med-status bad">WALLET · UNBOUND</span><span id="readyAdmin" class="med-status bad">ADMIN · LOCKED</span><span id="readyEscrow" class="med-status bad">ESCROW V1.4 · UNVERIFIED</span><span id="readyEnforcement" class="med-status bad">SERVER ENFORCEMENT · BLOCKED</span><span id="readyPersistence" class="med-status bad">CASE STORE · BLOCKED</span></div><pre id="readinessOutput" class="med-output" style="margin-top:10px">Calculando readiness…</pre>`;
+  section.innerHTML=`<div class="med-actions" style="justify-content:space-between;align-items:center"><div><h2>P2P Activation Readiness</h2><p>Chequeo fail-closed. No activa fondos: sólo separa lo listo de lo todavía bloqueado.</p></div><div class="med-actions"><span id="readinessOverall" class="med-status bad">REAL P2P · BLOCKED</span><button id="refreshReadiness" class="med-btn">Actualizar</button><button id="copyReadiness" class="med-btn">Copiar reporte</button></div></div><div class="med-divider"></div><div class="med-actions"><span id="readyFrontend" class="med-status good">FRONTEND · LOADED</span><span id="readyRelease" class="med-status bad">RELEASE · UNKNOWN</span><span id="readyArc" class="med-status good">ARC · LOCKED</span><span id="readyApi" class="med-status bad">CONTROL PLANE · OFF</span><span id="readyVerifier" class="med-status bad">ENTITLEMENT VERIFY · OFF</span><span id="readyKyc" class="med-status bad">KYC · BLOCKED</span><span id="readyWallet" class="med-status bad">WALLET · UNBOUND</span><span id="readyAdmin" class="med-status bad">ADMIN · LOCKED</span><span id="readyEscrow" class="med-status bad">ESCROW V1.4 · UNVERIFIED</span><span id="readyEnforcement" class="med-status bad">EDGE ENFORCEMENT · BLOCKED</span><span id="readyPersistence" class="med-status bad">CASE STORE · BLOCKED</span></div><pre id="readinessOutput" class="med-output" style="margin-top:10px">Calculando readiness…</pre>`;
   banner.insertAdjacentElement('afterend',section);
-  $('refreshReadiness').onclick=refreshReleaseMeta;
+  $('refreshReadiness').onclick=refreshReadinessSources;
   $('copyReadiness').onclick=copyReadiness;
 }
 function readinessSnapshot(){
   const arcLocked=String(A?.C?.chain||'').toLowerCase()===ARC_CHAIN&&same(A?.C?.usdc,ARC_USDC);
-  const apiOnline=isGood('apiHealth'),kycVerified=isGood('kycState'),walletAttested=isGood('walletState'),adminVerified=isGood('adminState'),escrowVerified=escrowReady(),releaseVerified=validRelease(releaseMeta);
+  const verifierOnline=validControlPlane(controlPlaneMeta,controlPlanePolicy);
+  const apiOnline=verifierOnline||isGood('apiHealth'),kycVerified=isGood('kycState'),walletAttested=isGood('walletState'),adminVerified=isGood('adminState'),escrowVerified=escrowReady(),releaseVerified=validRelease(releaseMeta);
   const caseHashPrepared=validBytes32($('caseHash')?.value),resolutionHashPrepared=validBytes32($('resolutionHash')?.value);
   const serverEntitlementEnforced=false;
   const casePersistenceEnabled=false;
   const realMoneyEnabled=false;
-  const critical={release_manifest_verified:releaseVerified,arc_locked:arcLocked,control_plane_online:apiOnline,kyc_verified:kycVerified,wallet_attested:walletAttested,admin_verified:adminVerified,escrow_v14_verified:escrowVerified,server_entitlement_enforced:serverEntitlementEnforced,case_persistence_enabled:casePersistenceEnabled};
+  const critical={release_manifest_verified:releaseVerified,arc_locked:arcLocked,control_plane_online:apiOnline,server_entitlement_verifier_online:verifierOnline,kyc_verified:kycVerified,wallet_attested:walletAttested,admin_verified:adminVerified,escrow_v14_verified:escrowVerified,server_entitlement_enforced:serverEntitlementEnforced,case_persistence_enabled:casePersistenceEnabled};
   return{
-    schema:'MASTERLAWEX_P2P_ACTIVATION_READINESS_V1',
+    schema:'MASTERLAWEX_P2P_ACTIVATION_READINESS_V2',
     deployed_release:releaseVerified?{git_sha:releaseMeta.git_sha||null,git_ref:releaseMeta.git_ref||null,environment:releaseMeta.environment||null,generated_at:releaseMeta.generated_at||null}:null,
+    control_plane:verifierOnline?{version:controlPlaneMeta.version||null,git_sha:controlPlaneMeta.release?.git_sha||null,environment:controlPlaneMeta.release?.environment||null,verifier:controlPlaneMeta.entitlement_verifier,verify_path:controlPlanePolicy.wallet_binding?.server_verification}:null,
     network:'Arc Testnet',chain_id:5042002,asset:ARC_USDC,
     critical,
     workflow:{case_hash_prepared:caseHashPrepared,resolution_hash_prepared:resolutionHashPrepared},
     blockers:[
       ...(!releaseVerified?['RELEASE_MANIFEST_NOT_VERIFIED']:[]),
-      ...(!serverEntitlementEnforced?['SERVER_SIDE_ENTITLEMENT_ENFORCEMENT_NOT_ENABLED']:[]),
+      ...(!verifierOnline?['SERVER_ENTITLEMENT_VERIFIER_NOT_LIVE']:[]),
+      ...(!serverEntitlementEnforced?['P2P_EDGE_ENTITLEMENT_ENFORCEMENT_NOT_ENABLED']:[]),
       ...(!casePersistenceEnabled?['P2P_CASE_PERSISTENCE_NOT_ENABLED']:[]),
       ...(!escrowVerified?['ESCROW_V1_4_NOT_VERIFIED_ONCHAIN']:[]),
       ...(!apiOnline?['MASTERLAW_CONTROL_PLANE_NOT_LIVE']:[])
@@ -78,11 +97,12 @@ function renderReadiness(){
   setStatus('readyRelease',c.release_manifest_verified?`RELEASE · ${String(releaseMeta.git_sha||releaseMeta.environment||'VERIFIED').slice(0,12)}`:'RELEASE · UNKNOWN',c.release_manifest_verified?'good':'bad');
   setStatus('readyArc',c.arc_locked?'ARC · LOCKED':'ARC · BLOCKED',c.arc_locked?'good':'bad');
   setStatus('readyApi',c.control_plane_online?'CONTROL PLANE · ONLINE':'CONTROL PLANE · OFF',c.control_plane_online?'good':'bad');
+  setStatus('readyVerifier',c.server_entitlement_verifier_online?'ENTITLEMENT VERIFY · ONLINE':'ENTITLEMENT VERIFY · OFF',c.server_entitlement_verifier_online?'good':'bad');
   setStatus('readyKyc',c.kyc_verified?'KYC · VERIFIED':'KYC · BLOCKED',c.kyc_verified?'good':'bad');
   setStatus('readyWallet',c.wallet_attested?'WALLET · ATTESTED':'WALLET · UNBOUND',c.wallet_attested?'good':'bad');
   setStatus('readyAdmin',c.admin_verified?'ADMIN · VERIFIED':'ADMIN · LOCKED',c.admin_verified?'good':'bad');
   setStatus('readyEscrow',c.escrow_v14_verified?'ESCROW V1.4 · VERIFIED':'ESCROW V1.4 · UNVERIFIED',c.escrow_v14_verified?'good':'bad');
-  setStatus('readyEnforcement','SERVER ENFORCEMENT · BLOCKED','bad');setStatus('readyPersistence','CASE STORE · BLOCKED','bad');
+  setStatus('readyEnforcement','EDGE ENFORCEMENT · BLOCKED','bad');setStatus('readyPersistence','CASE STORE · BLOCKED','bad');
   setStatus('readinessOverall',lastReadiness.ready_for_real_money?'REAL P2P · READY':'REAL P2P · BLOCKED',lastReadiness.ready_for_real_money?'good':'bad');
   $('readinessOutput').textContent=safeJson(lastReadiness);
 }
@@ -169,6 +189,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('prepareAdminResolution').onclick=prepareAdminResolution;
   $('masterlawToken').addEventListener('input',()=>{if(adminReady)resetAdmin('TOKEN_CHANGED · vuelve a validar rol admin.');else renderReadiness()});
   ['checkKyc','bindWallet','inspectEscrow','prepareFreeze','prepareResolve'].forEach(id=>{const el=$(id);if(el)el.addEventListener('click',()=>setTimeout(renderReadiness,750))});
-  setInterval(renderReadiness,5000);refreshReleaseMeta();renderReadiness();
+  setInterval(renderReadiness,5000);refreshReadinessSources();renderReadiness();
 });
 })();
