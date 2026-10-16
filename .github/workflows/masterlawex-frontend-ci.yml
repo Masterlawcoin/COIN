@@ -66,6 +66,33 @@ jobs:
           ! grep -E "await api\('(mark_paid|release|cancel|dispute)'" p2p.js
           ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|masterlawToken|boundWallet)' p2p-masterlaw-gate.js
 
+      - name: Validate real login PWA and mobile MetaMask
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in login.html auth.js metamask-connect.js manifest.webmanifest sw.js app-icon.svg pwa-build.js; do
+            test -s "$file" || { echo "Missing $file"; exit 1; }
+          done
+          grep -q "/api/exchange/auth/login" auth.js
+          grep -q "/api/exchange/auth/me" auth.js
+          grep -q "/api/exchange/auth/forgot" auth.js
+          grep -q "masterlawex:auth:v1" auth.js
+          grep -q "p2pMasterlawToken" auth.js
+          grep -q "Cuenta Masterlaw" auth.js
+          grep -q "Instalar app" auth.js
+          ! grep -q "/api/exchange/auth/register" auth.js login.html
+          ! grep -E '(password|mlxPassword).*(localStorage|sessionStorage)|setItem\([^)]*password' auth.js
+          grep -q '"display": "standalone"' manifest.webmanifest
+          grep -q '"start_url": "/p2p.html?source=pwa"' manifest.webmanifest
+          grep -q "url.pathname.startsWith('/api/')" sw.js
+          grep -q "@metamask/connect-evm@2.1.1" metamask-connect.js
+          grep -q "createEVMClient" metamask-connect.js
+          grep -q "chainIds:\[CHAIN\]" metamask-connect.js
+          grep -q "supportedNetworks:{\[CHAIN\]:RPC}" metamask-connect.js
+          grep -q "MLX_METAMASK_CONNECT" base/core.js
+          grep -q "METAMASK_CONNECT" base/core.js
+          ! grep -E 'private[_ -]?key|secretKey|seed phrase' auth.js metamask-connect.js login.html
+
       - name: Verify V1.5 fee, MetaMask and deploy lab
         shell: bash
         run: |
@@ -114,6 +141,10 @@ jobs:
       - name: JavaScript syntax checks
         run: |
           node --check build.js
+          node --check pwa-build.js
+          node --check auth.js
+          node --check metamask-connect.js
+          node --check sw.js
           node --check p2p.js
           node --check p2p-masterlaw-gate.js
           node --check p2p-v15-trade.js
@@ -131,9 +162,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in index.html p2p.html p2p.js p2p-masterlaw-gate.js p2p-v15-trade.js p2p-v15-abi.js protocol.html protocol.js protocol-v14.js protocol-v15.js mediation.html mediation.js mediation-admin.js mediation-abi.js release.json app.css core.js; do
+          for file in index.html login.html auth.js metamask-connect.js manifest.webmanifest sw.js app-icon.svg p2p.html p2p.js p2p-masterlaw-gate.js p2p-v15-trade.js p2p-v15-abi.js protocol.html protocol.js protocol-v14.js protocol-v15.js mediation.html mediation.js mediation-admin.js mediation-abi.js release.json app.css core.js; do
             test -s "dist/$file" || { echo "Missing dist/$file"; exit 1; }
           done
+          grep -q 'Entrar a MasterlawEX' dist/login.html
+          grep -q '/api/exchange/auth/login' dist/auth.js
+          grep -q 'rel="manifest" href="/manifest.webmanifest"' dist/p2p.html
+          grep -q 'src="/metamask-connect.js"' dist/p2p.html
+          grep -q 'src="/auth.js"' dist/p2p.html
           grep -q 'MetaMask · ARC Testnet + USDC' dist/p2p.html
           grep -q 'Escrow P2P V1.5 · comisión Masterlaw 1%' dist/p2p.html
           grep -q 'P2P ESCROW V1.5 · KYC + METAMASK + FEE 1% USDC · ARC TESTNET' dist/protocol.html
@@ -147,4 +183,4 @@ jobs:
           node -e "const r=require('./dist/release.json'); if(r.chain_id!==5042002||r.p2p_fee_bps!==100||r.p2p_fee_asset!=='USDC'||r.real_money_enabled!==false) process.exit(1)"
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 32 || { echo "Expected 32 dist files, found $count"; exit 1; }
+          test "$count" -eq 38 || { echo "Expected 38 dist files, found $count"; exit 1; }
