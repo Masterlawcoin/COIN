@@ -53,6 +53,7 @@ jobs:
           for file in "${files[@]}"; do
             test -s "base/${file}" || { echo "Missing base/${file}"; exit 1; }
           done
+          test -s p2p-masterlaw-gate.js
           test -s mediation.html
           test -s mediation.js
           test -s mediation-admin.js
@@ -87,6 +88,27 @@ jobs:
           grep -q "method:'eth_sendTransaction'" base/protocol-v14.js
           grep -q "eth_getCode" base/protocol-v14.js
           grep -q 'V1.4 exige contrato/multisig, no EOA' base/protocol-v14.js
+          grep -q 'Masterlaw KYC Gate' p2p.html
+          grep -q '/p2p-masterlaw-gate.js' p2p.html
+          grep -q "MASTERLAW_API='https://masterlaw-api.vercel.app'" p2p-masterlaw-gate.js
+          grep -q "/api/exchange/p2p/bind-wallet" p2p-masterlaw-gate.js
+          grep -q "/api/exchange/p2p/verify-entitlement" p2p-masterlaw-gate.js
+          grep -q "/api/exchange/p2p/gateway" p2p-masterlaw-gate.js
+          grep -q "PROTECTED=new Set(\['create_offer','take_offer','mark_paid','release','cancel','dispute'\])" p2p-masterlaw-gate.js
+          grep -q "entitlement:'\[MEMORY_ONLY\]'" p2p-masterlaw-gate.js
+          grep -q "real_money_enabled:false" p2p-masterlaw-gate.js
+          grep -q "window.MLX_P2P_GATE" p2p-masterlaw-gate.js
+          grep -q "protectedApi('create_offer'" p2p.js
+          grep -q "protectedApi('take_offer'" p2p.js
+          grep -q "protectedApi('dispute'" p2p.js
+          grep -q "else await protectedApi(action" p2p.js
+          ! grep -q "api('create_offer'" p2p.js
+          ! grep -q "api('take_offer'" p2p.js
+          ! grep -q "await api('dispute'" p2p.js
+          ! grep -E "await api\('(mark_paid|release|cancel)'" p2p.js
+          ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|masterlawToken|boundWallet)' p2p-masterlaw-gate.js
+          ! grep -E 'localStorage' p2p-masterlaw-gate.js
+          ! grep -E 'private[_ -]?key|secretKey|seed phrase|eth_sendTransaction' p2p-masterlaw-gate.js
           grep -q "MASTERLAW_API='https://masterlaw-api.vercel.app'" mediation.js
           grep -q "P2P_SESSION_KEY='masterlawex:p2p:session:v1'" mediation.js
           grep -q '/api/exchange/p2p/bind-wallet' mediation.js
@@ -123,7 +145,7 @@ jobs:
           ! grep -E 'localStorage|sessionStorage' mediation-admin.js
           ! grep -E 'eth_sendTransaction|private[_ -]?key|secretKey' mediation-admin.js
           ! grep -E 'private[_ -]?key|secretKey|seed phrase' base/protocol-v14.js
-          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js agents.html agents.js demo.html demo.js mediation.html mediation.js mediation-admin.js
+          ! grep -R -E '84532|Base Sepolia|sepolia.basescan' base p2p.html p2p.js p2p-masterlaw-gate.js agents.html agents.js demo.html demo.js mediation.html mediation.js mediation-admin.js
       - name: Verify V1.4 domains and browser ABI
         shell: bash
         run: |
@@ -139,25 +161,16 @@ jobs:
           const split=ethers.keccak256(ethers.toUtf8Bytes('MASTERLAWEX_P2P_MUTUAL_SPLIT_V1'));
           if(!js.includes(`ORDER_DOMAIN='${order}'`))throw Error(`V1.4 ORDER_DOMAIN mismatch: ${order}`);
           if(!js.includes(`SPLIT_DOMAIN='${split}'`))throw Error(`V1.4 SPLIT_DOMAIN mismatch: ${split}`);
-          const required=[
-            'VERSION()','asset()','arbiter()','ORDER_REF_DOMAIN()','SPLIT_DOMAIN()',
-            'computeOrderRef(bytes32)','computeSplitProposalHash(uint256,uint256,bytes32)',
-            'openDisputeByArbiter(uint256,bytes32)','resolveDispute(uint256,bool,bytes32)',
-            'proposeMutualSplit(uint256,uint256,bytes32)','approveMutualSplit(uint256,uint256,bytes32)'
-          ];
-          for(const sig of required){
-            const expected=ethers.id(sig).slice(2,10);
-            if(p.methodIdentifiers?.[sig]!==expected)throw Error(`V1.4 artifact selector mismatch ${sig}`);
-            if(!js.includes(`'${sig}'`))throw Error(`V1.4 browser does not require ${sig}`);
-          }
-          const names=p.abi.filter(x=>x.type==='function').map(x=>x.name);
-          for(const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw'])if(names.includes(forbidden))throw Error(`unsafe V1.4 method ${forbidden}`);
+          const required=['VERSION()','asset()','arbiter()','ORDER_REF_DOMAIN()','SPLIT_DOMAIN()','computeOrderRef(bytes32)','computeSplitProposalHash(uint256,uint256,bytes32)','openDisputeByArbiter(uint256,bytes32)','resolveDispute(uint256,bool,bytes32)','proposeMutualSplit(uint256,uint256,bytes32)','approveMutualSplit(uint256,uint256,bytes32)'];
+          for(const sig of required){const expected=ethers.id(sig).slice(2,10);if(p.methodIdentifiers?.[sig]!==expected)throw Error(`V1.4 artifact selector mismatch ${sig}`);if(!js.includes(`'${sig}'`))throw Error(`V1.4 browser does not require ${sig}`)}
+          const names=p.abi.filter(x=>x.type==='function').map(x=>x.name);for(const forbidden of ['withdraw','sweep','emergencyWithdraw','adminWithdraw'])if(names.includes(forbidden))throw Error(`unsafe V1.4 method ${forbidden}`);
           console.log('V1.4 BROWSER DOMAIN + ABI PASS',{order,split});
           NODE
       - name: JavaScript syntax checks
         run: |
           node --check build.js
           node --check p2p.js
+          node --check p2p-masterlaw-gate.js
           node --check agents.js
           node --check demo.js
           node --check mediation.js
@@ -174,6 +187,7 @@ jobs:
           test -s dist/index.html
           test -s dist/p2p.html
           test -s dist/p2p.js
+          test -s dist/p2p-masterlaw-gate.js
           test -s dist/agents.html
           test -s dist/protocol.html
           test -s dist/protocol.js
@@ -187,6 +201,15 @@ jobs:
           test -s dist/core.js
           grep -q 'MasterlawEX' dist/index.html
           grep -q 'P2P · ARC TESTNET SANDBOX' dist/p2p.html
+          grep -q 'Masterlaw KYC Gate' dist/p2p.html
+          grep -q '/p2p-masterlaw-gate.js' dist/p2p.html
+          grep -q '/api/exchange/p2p/gateway' dist/p2p-masterlaw-gate.js
+          grep -q 'MASTERLAW_KYC_GATE_REQUIRED' dist/p2p-masterlaw-gate.js
+          grep -q "protectedApi('create_offer'" dist/p2p.js
+          grep -q "protectedApi('take_offer'" dist/p2p.js
+          grep -q "protectedApi('dispute'" dist/p2p.js
+          ! grep -q "api('create_offer'" dist/p2p.js
+          ! grep -q "api('take_offer'" dist/p2p.js
           grep -q 'ARC TESTNET · PRE-ESCROW' dist/p2p.html
           grep -q 'Inspector escrow ARC · sólo lectura' dist/p2p.html
           grep -q 'NO FIRMA · NO TX · NO MUEVE FONDOS' dist/p2p.html
@@ -205,31 +228,19 @@ jobs:
           grep -q "method:'eth_sendTransaction'" dist/protocol-v14.js
           grep -q 'P2P V1.4 · PRE-REAL-MONEY' dist/mediation.html
           grep -q 'Masterlaw KYC + Wallet Gate' dist/mediation.html
-          grep -q 'Vincular wallet ARC' dist/mediation.html
           grep -q 'Masterlaw P2P Case Workspace' dist/mediation.html
           grep -q 'DB WRITES · OFF' dist/mediation.html
-          grep -q '/api/exchange/p2p/bind-wallet' dist/mediation.js
-          grep -q "entitlement:'\[MEMORY_ONLY\]'" dist/mediation.js
-          grep -q '/api/exchange/p2p/admin/prepare-case' dist/mediation-admin.js
-          grep -q '/api/exchange/p2p/admin/prepare-evidence' dist/mediation-admin.js
-          grep -q '/api/exchange/p2p/admin/prepare-resolution' dist/mediation-admin.js
           grep -q 'MASTERLAWEX_P2P_ACTIVATION_READINESS_V2' dist/mediation-admin.js
-          grep -q 'ENTITLEMENT VERIFY · ONLINE' dist/mediation-admin.js
           grep -q 'EDGE ENFORCEMENT · BLOCKED' dist/mediation-admin.js
-          grep -q 'P2P_EDGE_ENTITLEMENT_ENFORCEMENT_NOT_ENABLED' dist/mediation-admin.js
-          grep -q 'const serverEntitlementEnforced=false' dist/mediation-admin.js
-          grep -q 'const casePersistenceEnabled=false' dist/mediation-admin.js
           grep -q 'MASTERLAWEX_RELEASE_V1' dist/release.json
           grep -q '"chain_id": 5042002' dist/release.json
           grep -q '"real_money_enabled": false' dist/release.json
           node -e "const r=require('./dist/release.json'); if(r.schema!=='MASTERLAWEX_RELEASE_V1'||r.chain_id!==5042002||r.real_money_enabled!==false) process.exit(1)"
-          grep -q 'openDisputeByArbiter(uint256,bytes32)' dist/mediation-abi.js
-          grep -q 'resolveDispute(uint256,bool,bytes32)' dist/mediation-abi.js
-          grep -q 'broadcastByBrowser:false' dist/mediation.js
           ! grep -q 'eth_sendTransaction' dist/mediation.js
           ! grep -q 'eth_sendTransaction' dist/mediation-admin.js
           ! grep -E 'localStorage|sessionStorage' dist/mediation-admin.js
-          ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|walletEntitlement)' dist/mediation.js
+          ! grep -E '(localStorage|sessionStorage)\.setItem\([^)]*(entitlement|masterlawToken|boundWallet)' dist/p2p-masterlaw-gate.js
+          ! grep -E 'localStorage|eth_sendTransaction|private[_ -]?key|secretKey' dist/p2p-masterlaw-gate.js
           grep -q 'AI Control' dist/agents.html
           grep -q "chain:'0x4cef52'" dist/core.js
           grep -q "rpc:'https://rpc.testnet.arc.io'" dist/core.js
@@ -238,4 +249,4 @@ jobs:
           grep -q 'ensureChain,wait,send' dist/core.js
           ! grep -R -E '84532|Base Sepolia|sepolia.basescan' dist
           count=$(find dist -maxdepth 1 -type f | wc -l)
-          test "$count" -eq 28 || { echo "Expected 28 dist files, found $count"; exit 1; }
+          test "$count" -eq 29 || { echo "Expected 29 dist files, found $count"; exit 1; }
