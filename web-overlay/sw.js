@@ -1,6 +1,6 @@
 'use strict';
-const CACHE='masterlawex-pwa-v2';
-const SHELL=['/','/p2p.html','/login.html','/app.css','/metamask-connect.js','/core.js','/auth.js','/p2p-masterlaw-gate.js','/p2p-v15-trade.js','/p2p-v15-abi.js','/manifest.webmanifest','/app-icon.svg'];
+const CACHE='masterlawex-pwa-v3';
+const SHELL=['/','/p2p.html','/login.html','/app.css','/metamask-connect.js','/core.js','/auth.js','/p2p-wallet-auth.js','/wallet-flow.js','/p2p-masterlaw-gate.js','/p2p-v15-trade.js','/p2p-v15-abi.js','/manifest.webmanifest','/app-icon.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).catch(()=>null).then(()=>self.skipWaiting()));
