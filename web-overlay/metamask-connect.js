@@ -7,6 +7,7 @@ const SDK='https://esm.sh/@metamask/connect-evm@2.1.1?bundle';
 const EDGE='https://tjyplcnvwjzpfcbctlrs.supabase.co/functions/v1/masterlawex-p2p';
 const P2P_SESSION_KEY='masterlawex:p2p:session:v1';
 const AUTO_BIND_KEY='masterlawex:p2p:auto-bind:v2';
+const APP_ORIGIN=location.origin;
 let client=null,provider=null,loading=null,walletBusy=false;
 
 function dispatchAccount(accounts){window.dispatchEvent(new CustomEvent('mlx:mm-accounts',{detail:{accounts:Array.isArray(accounts)?accounts:[]}}))}
@@ -21,7 +22,7 @@ async function init(){
     const mod=await timeout(import(SDK),20000,'METAMASK_CONNECT_SDK_TIMEOUT');
     if(typeof mod.createEVMClient!=='function')throw Error('METAMASK_CONNECT_SDK_UNAVAILABLE');
     client=await mod.createEVMClient({
-      dapp:{name:'MasterlawEX',url:'https://arcx-exchange-v2.vercel.app',iconUrl:'https://arcx-exchange-v2.vercel.app/app-icon.svg'},
+      dapp:{name:'MasterlawEX',url:APP_ORIGIN,iconUrl:APP_ORIGIN+'/app-icon.svg'},
       api:{supportedNetworks:{[CHAIN]:RPC}},
       eventHandlers:{accountsChanged:accounts=>dispatchAccount(accounts),chainChanged:chainId=>dispatchChain(chainId)}
     });
