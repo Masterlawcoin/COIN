@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0e11">
+  <title>Iniciar sesión — MasterlawEX</title>
+  <link rel="stylesheet" href="/app.css">
+  <style>
+    body{min-height:100vh;background:#0b0e11;color:#eaecef}.mlx-login-wrap{min-height:calc(100vh - 64px);display:grid;place-items:center;padding:24px 16px 80px}.mlx-login-card{width:min(460px,100%);background:#14171c;border:1px solid #2b3139;border-radius:18px;padding:24px;box-shadow:0 24px 80px #0008}.mlx-login-card h1{margin:8px 0 6px;font-size:28px}.mlx-login-card p{color:#848e9c;line-height:1.5}.mlx-login-form{display:grid;gap:12px;margin-top:20px}.mlx-login-form label{display:grid;gap:6px;font-size:12px;font-weight:800;color:#b7bdc6}.mlx-login-form input{height:46px;background:#0f1217;border:1px solid #343a40;border-radius:10px;color:#eaecef;padding:0 13px;font-size:15px;outline:none}.mlx-login-form input:focus{border-color:#f0b90b}.mlx-login-primary,.mlx-login-secondary{height:46px;border-radius:10px;font-weight:900;cursor:pointer}.mlx-login-primary{border:0;background:#f0b90b;color:#111}.mlx-login-secondary{border:1px solid #343a40;background:#181a20;color:#eaecef}.mlx-login-message{min-height:20px;font-size:12px;color:#848e9c}.mlx-login-message.good{color:#0ecb81}.mlx-login-message.bad{color:#f6465d}.mlx-session-box{border:1px solid #2b3139;background:#0f1217;border-radius:10px;padding:12px;margin-top:16px;font-size:12px;line-height:1.5}.mlx-session-box b{color:#eaecef}.mlx-login-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.mlx-login-note{margin-top:16px;padding:12px;border:1px solid #2b3139;border-radius:10px;background:#101318;font-size:11px;color:#848e9c;line-height:1.5}.mlx-login-note strong{color:#f0b90b}@media(max-width:520px){.mlx-login-card{padding:20px}.mlx-login-actions{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header class="top">
+  <a class="logo mlx-logo" href="/"><i class="mlx-mark"><span>M</span><b>X</b></i><span class="mlx-word"><strong>Masterlaw</strong><em>EX</em><small>EXCHANGE</small></span></a>
+  <div class="top-right"><span class="network"><i></i>ARC TESTNET</span></div>
+</header>
+<main class="mlx-login-wrap">
+  <section class="mlx-login-card">
+    <span class="eyebrow">CUENTA MASTERLAW · LOGIN REAL</span>
+    <h1>Entrar a MasterlawEX</h1>
+    <p>Usa tu cuenta Masterlaw. Después vincularemos esa identidad con tu wallet MetaMask para comprobar KYC antes de operar P2P.</p>
+
+    <div id="mlxLoginSession" class="mlx-session-box"><b>Comprobando sesión…</b></div>
+    <div class="mlx-login-actions">
+      <button id="mlxContinue" class="mlx-login-primary" type="button" hidden>Continuar al P2P</button>
+      <button id="mlxLogout" class="mlx-login-secondary" type="button" hidden>Cerrar sesión</button>
+    </div>
+
+    <form id="mlxLoginForm" class="mlx-login-form" autocomplete="on">
+      <label>Email
+        <input id="mlxEmail" type="email" autocomplete="email" inputmode="email" required placeholder="tu@email.com">
+      </label>
+      <label>Contraseña
+        <input id="mlxPassword" type="password" autocomplete="current-password" required placeholder="••••••••">
+      </label>
+      <button id="mlxLoginSubmit" class="mlx-login-primary" type="submit">Iniciar sesión</button>
+      <button id="mlxForgot" class="mlx-login-secondary" type="button">Olvidé mi contraseña</button>
+      <div id="mlxLoginMessage" class="mlx-login-message" aria-live="polite"></div>
+    </form>
+
+    <button id="mlxInstallPage" class="mlx-login-secondary" type="button" style="width:100%;margin-top:12px">Instalar MasterlawEX en este dispositivo</button>
+
+    <div class="mlx-login-note">
+      <strong>Seguridad:</strong> la contraseña se envía únicamente al backend Masterlaw por HTTPS. MasterlawEX no pide seed ni clave privada de MetaMask. Las firmas de wallet se solicitan por separado cuando corresponda.
+      <br><br>El registro público automático no se habilita desde esta pantalla; utiliza una cuenta Masterlaw existente. KYC se verifica después del login y antes de cualquier acción P2P protegida.
+    </div>
+  </section>
+</main>
+</body>
+</html>
